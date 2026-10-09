@@ -3,8 +3,14 @@ import { getEmergencyAvailableAnaesthetists } from "@/lib/server/emergency-avail
 import { jsonError, jsonOk } from "@/lib/server/http";
 
 export async function GET() {
-  const viewer = await getSessionUser();
-  if (!isVerifiedPlatformUser(viewer)) return jsonError("Verified member access required.", 403, "VERIFIED_MEMBER_REQUIRED");
-  const anaesthetists = await getEmergencyAvailableAnaesthetists();
-  return jsonOk({ count: anaesthetists.length, anaesthetists });
+  try {
+    const viewer = await getSessionUser();
+    const verified = isVerifiedPlatformUser(viewer);
+    const records = await getEmergencyAvailableAnaesthetists({ includeRanking: false });
+    const response = jsonOk({ count: records.length, anaesthetists: verified ? records : [], nextExpiry: records[0]?.availableUntil ?? null });
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  } catch {
+    return jsonError("Unable to load live availability. Please retry.", 503);
+  }
 }

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { ShareLocation } from "@/components/home/share-location";
 import Link from "@/components/native-link";
 import { availabilityDates, validateAvailabilityRange, formatAvailabilityTime, withTimePeriod, availabilityRange } from "@/lib/availability-time";
 type Slot = { id: string; status: string; startAt: string; endAt: string; preferredArea?: string };
@@ -83,6 +84,7 @@ export function CalendarDashboard({ role }: { role: string }) {
       <div><AvailabilityTimePicker name="start" label="Start Time" value={startTime} onChange={setStartTime} /><button type="button" className="mt-2 min-h-11 rounded-xl border border-blue-700 px-4 font-semibold text-blue-700" onClick={() => { const now = new Date(); setDay("today"); setDates(availabilityDates(now)); setStartTime(now.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false })); setMsg(""); }}>Now</button></div>
       <div><AvailabilityTimePicker name="end" label="End Time" value={endTime} onChange={setEndTime} /><p aria-live="polite" className="mt-2 text-sm text-slate-600">{preview.endDate ? `End Date: ${new Date(`${preview.endDate}T12:00:00+05:30`).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "full" })}${preview.nextDay ? " · Next Day" : ""}` : startTime && endTime ? preview.error : "End Date is calculated automatically."}</p></div>
       <button type="submit" disabled={saving} className="min-h-12 rounded-xl bg-blue-700 p-3 text-base font-bold text-white disabled:opacity-60 sm:col-span-2">{saving ? "Saving…" : "Add Availability"}</button>
+      <div className="sm:col-span-2"><ShareLocation onUpdated={() => void load()} /></div>
     </form>}
     {msg && <p role="status" aria-live="polite" className="mt-3 rounded-xl bg-blue-50 p-3">{msg}</p>}
     {role === "anesthetist" && <><h2 className="mt-7 text-xl font-bold">My availability</h2><div className="mt-3 space-y-2">{slots.map(s => <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-white p-3"><span><b className="capitalize">{s.status}</b> · {formatTime(s.startAt)} – {formatTime(s.endAt)} {s.preferredArea ? `· ${s.preferredArea}` : ""}</span><button type="button" onClick={() => void remove(s.id)} className="min-h-11 px-3 text-red-700">Remove</button></div>)}{!slots.length && <p className="rounded-xl border bg-white p-4">No availability added yet.</p>}</div></>}

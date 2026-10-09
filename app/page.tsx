@@ -10,7 +10,7 @@ export default async function Page() {
   const [chatgptUser, account, emergencyAvailability, publicCases] = await Promise.all([
     getChatGPTUser(),
     getSessionUser(),
-    getEmergencyAvailableAnaesthetists({ includeRanking: false }),
+    getEmergencyAvailableAnaesthetists({ includeRanking: false }).catch(() => []),
     getPublicCases().catch(() => null),
   ]);
 

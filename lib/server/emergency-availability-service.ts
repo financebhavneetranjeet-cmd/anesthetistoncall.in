@@ -22,7 +22,7 @@ export type EmergencyAvailabilityDto = {
 };
 
 export async function getEmergencyAvailableAnaesthetists(options: { includeRanking?: boolean } = {}) {
-  if (!env.DB) return [] as EmergencyAvailabilityDto[];
+  if (!env.DB) throw new Error("Availability database unavailable.");
   const rows = await env.DB.prepare(EMERGENCY_AVAILABLE_ANAESTHETISTS_SQL).all<EligibleRow>();
   if (options.includeRanking === false) return rows.results.map((row) => toEmergencyAvailabilityDto(row, { score: 0, metrics: { rating: 0, ratingCount: 0 } })) as EmergencyAvailabilityDto[];
   const available = await Promise.all(rows.results.map(async (row) => {
