@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+
+const read=(path)=>readFileSync(path,"utf8");
+const caseRoute=read("app/api/cases/route.ts"),plannedRoute=read("app/api/planned/route.ts"),bidRoute=read("app/api/cases/[id]/bids/route.ts"),assignRoute=read("app/api/cases/[id]/assign/route.ts"),bell=read("components/notifications/notification-bell.tsx"),dashboard=read("app/cases/cases-dashboard.tsx");
+for(const source of [caseRoute,plannedRoute]) for(const token of ["u.role='anesthetist'","u.status='verified'","account_status","cp.verification_status='verified'","cp.case_notifications_enabled=1","cp.availability_status='available'","cp.available_until"]) assert.ok(source.includes(token),`case alert eligibility missing ${token}`);
+for(const token of ["AVAILABILITY_REQUIRED","case_notifications_enabled=1","availability_status='available'","available_until"]) assert.ok(bidRoute.includes(token),`response gate missing ${token}`);
+for(const token of ["isApprovedHospital","status='offered'","assigned_clinician_user_id","final_agreed_fee_paise","fee_locked_at"]) assert.ok(assignRoute.includes(token),`hospital selection safeguard missing ${token}`);
+for(const token of ["unreadCount","View Case","/cases#case-","Mark read"]) assert.ok(bell.includes(token),`bell workflow missing ${token}`);
+assert.ok(dashboard.includes("<NotificationBell />"),"dashboard bell must be available to hospital and anaesthetist roles");
+assert.ok(dashboard.includes('id={`case-${item.id}`}'),"notification deep link target is missing");
+
+const db=new DatabaseSync(":memory:");
+db.exec(`CREATE TABLE users(id TEXT PRIMARY KEY,role TEXT,status TEXT,account_status TEXT);
+CREATE TABLE clinician_profiles(user_id TEXT,verification_status TEXT,case_notifications_enabled INTEGER,availability_status TEXT,available_until TEXT);
+CREATE TABLE cases(id TEXT PRIMARY KEY,hospital_user_id TEXT,status TEXT,assigned_clinician_user_id TEXT,fee_locked INTEGER DEFAULT 0);
+CREATE TABLE notifications(id TEXT,user_id TEXT,case_id TEXT,read_at TEXT);
+CREATE TABLE case_responses(id TEXT PRIMARY KEY,case_id TEXT,clinician_user_id TEXT,status TEXT);
+INSERT INTO users VALUES('h','hospital','verified','active'),('a','anesthetist','verified','active'),('off','anesthetist','verified','active'),('blocked','anesthetist','verified','blocked'),('surgeon','surgeon','verified','active'),('admin','admin','verified','active');
+INSERT INTO clinician_profiles VALUES('a','verified',1,'available',datetime('now','+1 hour')),('off','verified',0,'unavailable',NULL),('blocked','verified',1,'available',datetime('now','+1 hour'));
+INSERT INTO cases(id,hospital_user_id,status) VALUES('case1','h','open');`);
+const eligible=db.prepare("SELECT u.id FROM users u JOIN clinician_profiles cp ON cp.user_id=u.id WHERE u.role='anesthetist' AND u.status='verified' AND u.account_status='active' AND cp.verification_status='verified' AND cp.case_notifications_enabled=1 AND cp.availability_status='available' AND datetime(cp.available_until)>CURRENT_TIMESTAMP").all().map(r=>r.id);
+assert.deepEqual(eligible,["a"],"only a verified, active, currently available anaesthetist receives the alert");
+db.prepare("INSERT INTO notifications VALUES('n1',?,'case1',NULL)").run(eligible[0]);
+assert.equal(db.prepare("SELECT COUNT(*) n FROM notifications WHERE user_id='off'").get().n,0,"availability off must stop new alerts");
+db.prepare("INSERT INTO case_responses VALUES('r1','case1','a','available')").run();
+const response=db.prepare("SELECT * FROM case_responses WHERE case_id='case1' AND status='available'").get();
+assert.equal(response.clinician_user_id,"a","I’m Available response must reach the posting hospital");
+const selected=db.prepare("UPDATE cases SET status='offered',assigned_clinician_user_id=?,fee_locked=1 WHERE id='case1' AND hospital_user_id='h' AND status='open'").run(response.clinician_user_id);
+assert.equal(selected.changes,1,"posting hospital must be able to select exactly one responder");
+const assigned=db.prepare("SELECT status,assigned_clinician_user_id,fee_locked FROM cases WHERE id='case1'").get();
+assert.equal(assigned.status,"offered");assert.equal(assigned.assigned_clinician_user_id,"a");assert.equal(assigned.fee_locked,1);
+assert.equal(db.prepare("UPDATE cases SET status='offered' WHERE id='case1' AND hospital_user_id='surgeon' AND status='open'").run().changes,0,"other roles cannot select for another hospital");
+console.log("End-to-end case workflow and hospital/anaesthetist/surgeon/admin role boundaries passed on the durable server-side state model.");

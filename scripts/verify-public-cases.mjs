@@ -1,0 +1,24 @@
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync, readdirSync } from "node:fs";
+import { build } from "esbuild";
+const db = new DatabaseSync(":memory:");
+for (const file of readdirSync("drizzle").filter(f => f.endsWith(".sql")).sort()) db.exec(readFileSync(`drizzle/${file}`, "utf8"));
+globalThis.__publicCaseDB = { prepare: sql => ({ all: async () => ({ results: db.prepare(sql).all() }) }) };
+const output = await build({ entryPoints: ["lib/server/public-cases.ts"], bundle: true, platform: "node", format: "esm", write: false, plugins: [{ name: "isolated-db", setup(b) { b.onResolve({ filter: /^cloudflare:workers$/ }, () => ({ path: "worker", namespace: "mock" })); b.onLoad({ filter: /.*/, namespace: "mock" }, () => ({ contents: "export const env={DB:globalThis.__publicCaseDB};" })); } }] });
+const { getPublicCases } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString("base64")}`);
+db.exec(`INSERT INTO users(id,mobile,full_name,role,status,account_status) VALUES('owner','9000000001','Private owner','hospital','verified','active');
+INSERT INTO hospitals(id,owner_user_id,name,address,city,approval_status) VALUES('hospital','owner','Test Hospital','Private exact address','Amritsar','approved');`);
+function seed(id, status = "open", date = "2099-01-01T12:00:00Z") { db.prepare("INSERT INTO cases(id,hospital_id,posted_by_user_id,procedure_name,specialty,anaesthesia_type,scheduled_at,offered_fee_paise,status,public_notes,location) VALUES(?,'hospital','owner','Private procedure','Orthopaedics','Spinal',?,100000,?,'Never expose free-text notes','Private exact location')").run(id,date,status); }
+seed("open");seed("closed","completed");seed("cancelled","cancelled");seed("pending","pending_approval");seed("past","open","2000-01-01T12:00:00Z");seed("assigned","assigned");
+seed("expired-emergency"); db.exec("UPDATE cases SET is_emergency=1,sos_status='searching',sos_expires_at='2000-01-01' WHERE id='expired-emergency'");
+db.exec("INSERT INTO case_private_details(id,case_id,patient_initials,contact_phone,clinical_notes) VALUES('private','open','AB','9000000009','Private clinical notes')");
+assert.deepEqual((await getPublicCases()).map(row => ({...row})),[{specialty:"Orthopaedics",anaesthesiaType:"Spinal",hospitalName:"Test Hospital",city:"Amritsar",scheduledAt:"2099-01-01T12:00:00Z",offeredFeePaise:100000,urgency:"routine",durationMinutes:null}]);
+const serialized=JSON.stringify(await getPublicCases());for(const privateValue of ["Private","9000000009","patient","clinical_notes","public_notes","owner_user_id"]) assert.ok(!serialized.includes(privateValue));
+db.exec("UPDATE users SET account_status='blocked' WHERE id='owner'");assert.equal((await getPublicCases()).length,0);
+db.exec("UPDATE users SET account_status='active'; UPDATE hospitals SET approval_status='pending'");assert.equal((await getPublicCases()).length,0);
+db.exec("UPDATE hospitals SET approval_status='approved'; UPDATE cases SET status='assigned' WHERE id='open'");assert.equal((await getPublicCases()).length,0);
+assert.ok(readFileSync("app/api/cases/route.ts","utf8").includes('"VERIFIED_MEMBER_REQUIRED"'));
+assert.ok(readFileSync("app/api/cases/[id]/bids/route.ts","utf8").includes('isVerifiedAnaesthetist'));
+console.log("PASS anonymous case summaries; private-field exclusion; closed, assigned, expired, pending and restricted cases excluded; existing response gates preserved.");
+db.close();

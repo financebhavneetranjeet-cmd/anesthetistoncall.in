@@ -1,0 +1,1 @@
+ALTER TABLE `hospitals` ADD `google_maps_url` text;

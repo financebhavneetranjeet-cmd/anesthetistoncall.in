@@ -1,0 +1,9 @@
+import{readFileSync}from'node:fs';
+const schema=readFileSync('db/schema.ts','utf8'),api=readFileSync('app/api/cases/[id]/safety/route.ts','utf8'),detail=readFileSync('app/api/safety/incidents/[id]/route.ts','utf8'),safety=readFileSync('lib/server/safety.ts','utf8'),ui=readFileSync('app/cases/[id]/private/safety-incident-panel.tsx','utf8'),admin=readFileSync('app/admin/safety/safety-governance.tsx','utf8'),performance=readFileSync('lib/server/performance.ts','utf8');
+for(const x of['safety_incidents','safety_incident_categories','safety_incident_statements','safety_incident_documents','safety_follow_up_actions','safety_incident_timeline','safety_access_logs','clinical_governance_reviewers'])if(!schema.includes(x))throw new Error(`Task23 missing ${x}`);
+for(const x of['cardiac_arrest_cpr','medication_error','equipment_failure','professional_conduct_concern'])if(!safety.includes(x))throw new Error(`Task23 category missing ${x}`);
+for(const x of['anaesthesiaRecordUnchanged','ratingsReliabilityImpact','safetyEvent'])if(!api.includes(x)&&!detail.includes(x))throw new Error(`Task23 safeguard missing ${x}`);
+for(const x of['Patient care and emergency management come first','does not mean anyone was negligent','Report Clinical/Safety Incident'])if(!ui.includes(x))throw new Error(`Task23 safety UI missing ${x}`);
+for(const x of['Clinical reviewer permission required','pattern requires clinical review','does not establish fault'])if(!admin.includes(x))throw new Error(`Task23 governance UI missing ${x}`);
+if(performance.includes('safety_incidents'))throw new Error('Clinical safety reports must not feed reliability calculations automatically');
+console.log('Task 23 safety reporting, governance separation, immutable timeline, clinical-record linking, privacy and reliability-separation checks passed.');

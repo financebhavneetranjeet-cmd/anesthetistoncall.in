@@ -1,0 +1,1 @@
+import{getSessionUser,isVerifiedAnaesthetist}from"@/lib/server/session";import{jsonError,jsonOk}from"@/lib/server/http";import{performanceFor}from"@/lib/server/performance";export async function GET(){const u=await getSessionUser();if(!isVerifiedAnaesthetist(u))return jsonError("Verified anaesthetist access required.",403);return jsonOk({performance:await performanceFor(u.id)})}

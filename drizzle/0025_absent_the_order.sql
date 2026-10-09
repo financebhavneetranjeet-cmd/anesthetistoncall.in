@@ -1,0 +1,1 @@
+ALTER TABLE `hospitals` ADD `facility_type` text DEFAULT 'hospital' NOT NULL;

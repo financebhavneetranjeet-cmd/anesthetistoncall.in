@@ -1,7 +1,7 @@
 # Anesthetist on Call
 
-Source exported from published Sites version 99.
+Export of published Sites version 99, including 12-hour availability, overnight dates and Now button.
 
 Website: https://anesthetistoncall.in
 
-Runtime secrets and live database records are not included.
+Runtime credentials and live database records are not included.

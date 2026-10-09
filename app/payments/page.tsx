@@ -1,0 +1,1 @@
+import{getSessionUser,isVerifiedPlatformUser}from"@/lib/server/session";import{redirect}from"next/navigation";import{PaymentsDashboard}from"./payments-dashboard";export const dynamic="force-dynamic";export default async function PaymentsPage(){const user=await getSessionUser();if(!isVerifiedPlatformUser(user))redirect("/login");return <PaymentsDashboard/>}

@@ -1,0 +1,24 @@
+"use client";
+import {useCallback,useEffect,useRef,useState} from "react";
+import Link from "@/components/native-link";
+import {Bell,Clock3,MapPin,X} from "lucide-react";
+
+type Notice={id:string;caseId:string|null;kind:string;title:string;body:string;readAt:string|null;createdAt:string;procedureName:string|null;hospitalName:string|null;location:string|null;scheduledAt:string|null;urgency:string|null;offeredFeePaise:number|null};
+type Feed={notifications:Notice[];unreadCount:number;userRole:string;notificationEnabled:boolean};
+const CASE_KINDS=new Set(["case_open","planned_case","sos_alert","replacement_alert"]);
+
+export function NotificationBell(){
+  const[feed,setFeed]=useState<Feed|null>(null);const[open,setOpen]=useState(false);const seen=useRef<Set<string>|null>(null);
+  const load=useCallback(async()=>{try{const r=await fetch("/api/notifications",{cache:"no-store"});if(!r.ok)return;const next=await r.json() as Feed;if(seen.current&&next.userRole==="anesthetist"&&next.notificationEnabled&&"Notification" in window&&Notification.permission==="granted"){for(const n of next.notifications){if(!seen.current.has(n.id)&&!n.readAt&&CASE_KINDS.has(n.kind))new Notification(n.procedureName||n.title,{body:[n.hospitalName,n.location,n.scheduledAt?new Date(n.scheduledAt).toLocaleString("en-IN"):null].filter(Boolean).join(" · "),tag:n.id});}}seen.current=new Set(next.notifications.map(n=>n.id));setFeed(next)}catch{}},[]);
+  useEffect(()=>{void load();const timer=window.setInterval(()=>void load(),30000);return()=>window.clearInterval(timer)},[load]);
+  async function mark(id:string){await fetch("/api/notifications",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id})});setFeed(current=>current?{...current,unreadCount:Math.max(0,current.unreadCount-1),notifications:current.notifications.map(n=>n.id===id?{...n,readAt:new Date().toISOString()}:n)}:current)}
+  if(!feed)return null;
+  return <div className="relative z-50">
+    <button type="button" onClick={()=>setOpen(v=>!v)} aria-expanded={open} aria-label={`${feed.unreadCount} unread notifications`} className="relative grid size-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"><Bell className="size-5"/>{feed.unreadCount>0&&<span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-red-600 px-1 text-xs font-bold text-white">{feed.unreadCount>99?"99+":feed.unreadCount}</span>}</button>
+    {open&&<div className="fixed inset-x-3 top-20 max-h-[75vh] overflow-hidden rounded-2xl border bg-white shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-14 sm:w-[25rem]">
+      <div className="flex items-center justify-between border-b p-4"><div><p className="font-bold">Case notifications</p><p className={`text-xs ${feed.notificationEnabled?"text-emerald-700":"text-slate-500"}`}>{feed.userRole==="anesthetist"?(feed.notificationEnabled?"Available Now · notifications on":"Unavailable · new case alerts off"):"Updates requiring your attention"}</p></div><button onClick={()=>setOpen(false)} aria-label="Close notifications" className="grid size-10 place-items-center rounded-lg hover:bg-slate-100"><X className="size-5"/></button></div>
+      <div className="max-h-[58vh] overflow-y-auto">{feed.notifications.length===0?<p className="p-6 text-center text-sm text-slate-500">No notifications yet.</p>:feed.notifications.map(n=><article key={n.id} className={`border-b p-4 last:border-0 ${n.readAt?"bg-white":"bg-blue-50"}`}><p className="font-semibold">{n.procedureName||n.title}</p>{!n.caseId&&<p className="mt-1 text-sm leading-5 text-slate-700">{n.body}</p>}{n.hospitalName&&<p className="mt-1 text-sm text-slate-700">{n.hospitalName}</p>}<div className="mt-2 space-y-1 text-xs text-slate-500">{n.location&&<p className="flex gap-1"><MapPin className="size-3.5 shrink-0"/>{n.location}</p>}{n.scheduledAt&&<p className="flex gap-1"><Clock3 className="size-3.5 shrink-0"/>{new Date(n.scheduledAt).toLocaleString("en-IN")}</p>}<p>{n.urgency&&<span className="capitalize">{n.urgency}</span>}{n.offeredFeePaise?` · ₹${(n.offeredFeePaise/100).toLocaleString("en-IN")}`:""}</p><p>Notified {new Date(n.createdAt).toLocaleString("en-IN")}</p></div><div className="mt-3 flex items-center justify-between gap-3">{n.caseId?<Link href={`/cases#case-${n.caseId}`} onClick={()=>void mark(n.id)} className="font-semibold text-blue-700">View Case →</Link>:<span/>}{!n.readAt&&<button onClick={()=>void mark(n.id)} className="text-xs font-semibold text-slate-600">Mark read</button>}</div></article>)}</div>
+      <Link href="/notifications" className="grid min-h-11 place-items-center border-t text-sm font-semibold text-blue-700">View notification history</Link>
+    </div>}
+  </div>
+}

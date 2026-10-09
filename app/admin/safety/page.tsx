@@ -1,0 +1,1 @@
+import{redirect}from"next/navigation";import{getSessionUser}from"@/lib/server/session";import{SafetyGovernance}from"./safety-governance";export const dynamic='force-dynamic';export default async function Page(){const u=await getSessionUser();if(!u||u.role!=='admin'||u.status!=='verified')redirect('/login');return <SafetyGovernance/>}

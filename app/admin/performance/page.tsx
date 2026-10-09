@@ -1,0 +1,1 @@
+import{redirect}from"next/navigation";import{isAdmin}from"@/lib/server/admin";import{PerformanceAdmin}from"./performance-admin";export const dynamic="force-dynamic";export default async function Page(){if(!await isAdmin())redirect('/login');return <PerformanceAdmin/>}

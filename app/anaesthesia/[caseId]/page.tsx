@@ -1,0 +1,1 @@
+"use client";import{use}from"react";import{AnaesthesiaWorkspace}from"./workspace";export default function Page({params}:{params:Promise<{caseId:string}>}){return <AnaesthesiaWorkspace caseId={use(params).caseId}/>}
