@@ -118,6 +118,10 @@ export function CasesDashboard({
           </div>
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:gap-3">
             <NotificationBell />
+            {role === "hospital" || role === "surgeon" ? <>
+              <button type="button" onClick={() => window.location.reload()} className="min-h-12 rounded-xl border bg-white px-4 py-2 font-semibold text-black">Refresh Page</button>
+              {(role === "surgeon" || approved) && <Link href={role === "surgeon" ? "/planned" : "/cases/new"} className="grid min-h-12 place-items-center rounded-xl bg-blue-700 px-4 py-2 font-semibold text-white">Post a Case</Link>}
+            </> : <>
             <Link
               href="/calendar"
               className="grid min-h-11 place-items-center rounded-xl border bg-white px-4 py-2"
@@ -165,6 +169,7 @@ export function CasesDashboard({
                 Post a case
               </Link>
             )}
+            </>}
           </div>
         </header>
         {message && (

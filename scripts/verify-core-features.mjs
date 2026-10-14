@@ -28,7 +28,7 @@ const requiredFiles = [
 ];
 
 const contentChecks = [
-  ["app/cases/new/new-case-form.tsx", ["Procedure or surgery", "Specialty", "Post open case", "Allow optional fee bids"]],
+  ["app/cases/new/new-case-form.tsx", ["Procedure or surgery", "Hospital or location", "Post open case", "Allow optional fee bids"]],
   ["app/cases/cases-dashboard.tsx", ["I’m Available", "Submit fee bid", "/assign", "Accept assignment", "Decline assignment", "Open coordination & OT progress", "Pending Acceptance"]],
   ["app/api/cases/[id]/bids/route.ts", ["proposedFeeRupees", "bidding_enabled", "status = 'available'"]],
   ["app/api/cases/[id]/assign/route.ts", ["status='offered'", "assigned_clinician_user_id", "final_agreed_fee_paise", "fee_locked_at"]],

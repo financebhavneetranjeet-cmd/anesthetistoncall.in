@@ -20,8 +20,7 @@ export function NewCaseForm() {
     requestId.current ??= crypto.randomUUID();
     const body = {
       requestId: requestId.current,
-      procedureName: form.get("procedureName"), specialty: form.get("specialty"), location: form.get("location"),
-      anaesthesiaType: form.get("anaesthesiaType") || undefined,
+      procedureName: form.get("procedureName"), location: form.get("location"),
       scheduledAt: new Date(`${String(form.get("caseDate"))}T${String(form.get("reportingTime"))}`).toISOString(),
       offeredFeeRupees: fee ? Number(fee) : undefined, urgency: form.get("urgency"),
       durationMinutes: duration ? Number(duration) : undefined, biddingEnabled: form.get("biddingEnabled") === "on",
@@ -39,9 +38,9 @@ export function NewCaseForm() {
     <p className="text-sm font-semibold text-blue-700">HOSPITAL WORKFLOW</p><h1 className="text-2xl font-bold sm:text-3xl">Post a case</h1>
     <p className="mt-2 leading-6 text-slate-600">Approved hospitals can publish directly to verified anaesthetists. The new case will appear as Open.</p>
     {message && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-red-800">{message}</p>}
-    <div className="mt-6 grid min-w-0 gap-4 sm:grid-cols-2">
-      <Field name="procedureName" label="Procedure or surgery" required /><Field name="specialty" label="Specialty" placeholder="e.g. Orthopaedics" required />
-      <Field name="location" label="Hospital or location" required /><Field name="anaesthesiaType" label="Anaesthesia type (if known)" placeholder="e.g. General, spinal" />
+    <div className="mt-6 grid min-w-0 gap-4 text-black sm:grid-cols-2">
+      <Field name="procedureName" label="Procedure or surgery" required />
+      <Field name="location" label="Hospital or location" required />
       <Field name="caseDate" label="Date" type="date" required /><Field name="reportingTime" label="Reporting time" type="time" required />
       <Field name="duration" label="Estimated case duration (minutes)" type="number" min="15" required />
       <label className="grid min-w-0 gap-1 text-sm font-medium">Urgency<select name="urgency" className="h-12 min-w-0 w-full rounded-xl border p-3"><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="emergency">Emergency</option></select></label>

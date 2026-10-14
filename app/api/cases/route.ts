@@ -9,7 +9,7 @@ import { sendWebPushForCase } from "@/lib/server/web-push";
 
 const caseSchema = z.object({
   requestId: z.string().uuid().optional(),
-  procedureName: z.string().trim().min(3).max(160), specialty: z.string().trim().min(2).max(100), location: z.string().trim().min(2).max(200), anaesthesiaType: z.string().trim().max(60).optional(), scheduledAt: z.string().datetime(),
+  procedureName: z.string().trim().min(3).max(160), specialty: z.string().trim().max(100).optional(), location: z.string().trim().min(2).max(200), anaesthesiaType: z.string().trim().max(60).optional(), scheduledAt: z.string().datetime(),
   offeredFeeRupees: z.number().int().positive().max(1_000_000), urgency: z.enum(["routine", "urgent", "emergency"]), durationMinutes: z.number().int().min(15).max(1440), biddingEnabled: z.boolean().default(false),
   publicNotes: z.string().trim().max(1000).optional(), patientInitials: z.string().trim().max(12).optional(), patientAge: z.number().int().min(0).max(120).optional(), patientSex: z.enum(["female", "male", "other"]).optional(),
   contactPhone: z.string().trim().max(20).optional(), locationInstructions: z.string().trim().max(300).optional(), clinicalNotes: z.string().trim().max(1000).optional(),
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   if (new Date(parsed.data.scheduledAt).getTime() <= Date.now()) return jsonError("Scheduled time must be in the future.");
   const caseId = parsed.data.requestId ?? crypto.randomUUID(); const d = parsed.data;
   await env.DB.batch([
-    env.DB.prepare("INSERT OR IGNORE INTO cases (id, hospital_id, posted_by_user_id, procedure_name, specialty, location, anaesthesia_type, scheduled_at, offered_fee_paise, urgency, duration_minutes, public_notes, bidding_enabled, status, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)").bind(caseId, user.hospitalId, user.id, d.procedureName, d.specialty, d.location, d.anaesthesiaType || "Not specified", d.scheduledAt, d.offeredFeeRupees * 100, d.urgency, d.durationMinutes, d.publicNotes ?? null, d.biddingEnabled ? 1 : 0),
+    env.DB.prepare("INSERT OR IGNORE INTO cases (id, hospital_id, posted_by_user_id, procedure_name, specialty, location, anaesthesia_type, scheduled_at, offered_fee_paise, urgency, duration_minutes, public_notes, bidding_enabled, status, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)").bind(caseId, user.hospitalId, user.id, d.procedureName, d.specialty || null, d.location, d.anaesthesiaType || "Not specified", d.scheduledAt, d.offeredFeeRupees * 100, d.urgency, d.durationMinutes, d.publicNotes ?? null, d.biddingEnabled ? 1 : 0),
     env.DB.prepare("INSERT OR IGNORE INTO case_private_details (id, case_id, patient_initials, patient_age, patient_sex, contact_phone, location_instructions, clinical_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(caseId, caseId, d.patientInitials ?? null, d.patientAge ?? null, d.patientSex ?? null, d.contactPhone ?? null, d.locationInstructions ?? null, d.clinicalNotes ?? null),
     env.DB.prepare(`INSERT OR IGNORE INTO notifications (id,user_id,case_id,kind,title,body,dedupe_key)
       SELECT lower(hex(randomblob(16))),u.id,?,'case_open',CASE WHEN ? IN ('urgent','emergency') THEN 'Urgent anaesthesia case' ELSE 'New open case' END,?,'case_open:'||?||':'||u.id

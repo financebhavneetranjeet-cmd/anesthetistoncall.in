@@ -5,7 +5,7 @@ import { jsonError, jsonOk } from "@/lib/server/http";
 import { auditCase } from "@/lib/server/case-audit";
 import { sendWebPushForCase } from "@/lib/server/web-push";
 
-const schema = z.object({ hospitalId: z.string().uuid().optional(), procedureName: z.string().trim().min(3), specialty: z.string().trim().min(2), scheduledAt: z.string().datetime(), durationMinutes: z.number().int().min(15), offeredFeeRupees: z.number().int().positive(), anaesthesiaType: z.string().trim().optional(), notes: z.string().trim().max(1000).optional() });
+const schema = z.object({ hospitalId: z.string().uuid().optional(), procedureName: z.string().trim().min(3), specialty: z.string().trim().optional(), scheduledAt: z.string().datetime(), durationMinutes: z.number().int().min(15), offeredFeeRupees: z.number().int().positive(), anaesthesiaType: z.string().trim().optional(), notes: z.string().trim().max(1000).optional() });
 
 export async function GET() {
   if (!env.DB) return jsonError("Database unavailable.", 503);
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   if (new Date(data.scheduledAt) <= new Date()) return jsonError("Choose a future reporting time.");
   const id = crypto.randomUUID();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO cases(id,hospital_id,posted_by_user_id,procedure_name,specialty,location,anaesthesia_type,scheduled_at,offered_fee_paise,duration_minutes,public_notes,bidding_enabled,status,approved_at,is_planned,booking_status) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,'open',CURRENT_TIMESTAMP,1,'requested')").bind(id, hospitalId, user.id, data.procedureName, data.specialty, hospital.name, data.anaesthesiaType ?? "Not specified", data.scheduledAt, data.offeredFeeRupees * 100, data.durationMinutes, data.notes ?? null),
+    env.DB.prepare("INSERT INTO cases(id,hospital_id,posted_by_user_id,procedure_name,specialty,location,anaesthesia_type,scheduled_at,offered_fee_paise,duration_minutes,public_notes,bidding_enabled,status,approved_at,is_planned,booking_status) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,'open',CURRENT_TIMESTAMP,1,'requested')").bind(id, hospitalId, user.id, data.procedureName, data.specialty || null, hospital.name, data.anaesthesiaType ?? "Not specified", data.scheduledAt, data.offeredFeeRupees * 100, data.durationMinutes, data.notes ?? null),
     env.DB.prepare("INSERT INTO case_private_details(id,case_id) VALUES(?,?)").bind(crypto.randomUUID(), id),
     env.DB.prepare(`INSERT OR IGNORE INTO notifications(id,user_id,case_id,kind,title,body,dedupe_key)
       SELECT lower(hex(randomblob(16))),u.id,?,'planned_case','New advance case',?,'planned:'||?||':'||u.id
