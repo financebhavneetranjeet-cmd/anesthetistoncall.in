@@ -1,3 +1,4 @@
+import { getCurrentAnaesthetistAvailability } from "@/lib/server/emergency-availability-service";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import { getSessionUser, isVerifiedAnaesthetist } from "@/lib/server/session";
@@ -11,11 +12,9 @@ export async function GET() {
   if (!isVerifiedAnaesthetist(user)) return jsonError("Verified anaesthetist access is required before viewing availability.", 403, "VERIFICATION_REQUIRED");
   if (!env.DB) return jsonError("Database unavailable.", 503, "DB_UNAVAILABLE");
   const row = await env.DB.prepare("SELECT availability_status AS status, available_until AS availableUntil, case_notifications_enabled AS notificationsEnabled, preferred_emergency_fee_paise AS preferredEmergencyFeePaise, availability_latitude IS NOT NULL AND availability_longitude IS NOT NULL AS locationShared FROM clinician_profiles WHERE id=? LIMIT 1").bind(user.clinicianId).first<{ status: string; availableUntil: string | null; notificationsEnabled: number; preferredEmergencyFeePaise: number | null; locationShared: number }>();
-  const active = Boolean(row?.status === "available" && row.availableUntil && new Date(row.availableUntil).getTime() > Date.now());
-  if (row?.status === "available" && !active) {
-    await env.DB.prepare("UPDATE clinician_profiles SET availability_status='unavailable',case_notifications_enabled=0,available_until=NULL,availability_latitude=NULL,availability_longitude=NULL,availability_location_at=NULL WHERE id=? AND availability_status='available' AND (available_until IS NULL OR datetime(available_until)<=CURRENT_TIMESTAMP)").bind(user.clinicianId).run();
-  }
-  return jsonOk({ availability: { status: active ? "available" : "unavailable", availableUntil: active ? row?.availableUntil ?? null : null, notificationsEnabled: active && Boolean(row?.notificationsEnabled), preferredEmergencyFeeRupees: active && row?.preferredEmergencyFeePaise ? Math.round(row.preferredEmergencyFeePaise / 100) : null, locationShared: active && Boolean(row?.locationShared) } });
+  const current = await getCurrentAnaesthetistAvailability(user.id);
+  const active = Boolean(current);
+  return jsonOk({ availability: { status: active ? "available" : "unavailable", availableUntil: active ? current?.availableUntil ?? null : null, notificationsEnabled: active, preferredEmergencyFeeRupees: active && row?.preferredEmergencyFeePaise ? Math.round(row.preferredEmergencyFeePaise / 100) : null, locationShared: active && Boolean(row?.locationShared) } });
 }
 
 export async function POST(request: Request) {

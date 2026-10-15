@@ -19,6 +19,8 @@ declare namespace Cloudflare {
     MSG91_HOSPITAL_APPROVAL_VARIABLES?: string;
     MSG91_CASE_POSTED_TEMPLATE_ID?: string;
     MSG91_CASE_POSTED_VARIABLES?: string;
+    // Temporary, expiring access scoped only to the fixed admin push test.
+    PUSH_TEST_ACCESS?: string;
     WEB_PUSH_PUBLIC_KEY?: string;
     WEB_PUSH_PRIVATE_KEY?: string;
   }

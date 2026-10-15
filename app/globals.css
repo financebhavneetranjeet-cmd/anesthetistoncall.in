@@ -160,3 +160,41 @@ li {
     height: 62px;
   }
 }
+
+/* Readable dashboard actions and availability controls across native mobile themes. */
+.aoc-light-green {
+  background-color: #E8F5E9;
+  border-color: #4CAF50;
+  color: #1B5E20;
+  color-scheme: light;
+}
+.aoc-light-green:focus-visible,
+.aoc-light-green :focus-visible {
+  outline: 2px solid #1B5E20;
+  outline-offset: 2px;
+}
+.aoc-green-value {
+  color: #1B5E20;
+  color-scheme: light;
+}
+.aoc-light-green option {
+  background-color: #E8F5E9;
+  color: #1B5E20;
+}
+.aoc-availability :is(label, legend, h1, h2) {
+  color: #000000;
+}
+
+/* Light surfaces keep black copy even when the phone uses dark mode. */
+.aoc-dashboard,
+.aoc-availability {
+  color: #000000;
+  color-scheme: light;
+  --foreground: #000000;
+  --card-foreground: #000000;
+  --muted-foreground: #000000;
+}
+.aoc-dashboard :is(h1, h2, h3, p, label, legend),
+.aoc-availability :is(h1, h2, h3, p, label, legend) {
+  color: #000000;
+}

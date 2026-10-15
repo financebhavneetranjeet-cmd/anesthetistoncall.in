@@ -1,10 +1,12 @@
 import { env } from "cloudflare:workers";
-import { sendWebPush } from "@/lib/server/web-push";
+import { publishAdminNotice, sendWebPush } from "@/lib/server/web-push";
 
 type NoticeInput = { userId: string; caseId: string; kind: string; title: string; body: string; dedupeKey: string; mobile?: string | null };
 
 export async function notifyUser(input: NoticeInput): Promise<{ created: boolean; notificationId: string | null }> {
   if (!env.DB) return { created: false, notificationId: null };
+  await publishAdminNotice({title: input.title, body: input.body, url: "/admin", tag: input.dedupeKey},
+    ["case_open", "sos_alert", "planned_case"].includes(input.kind) ? `case:${input.caseId}:${input.kind}:` : input.dedupeKey, input.caseId);
   const id = crypto.randomUUID();
   const result = await env.DB.prepare("INSERT OR IGNORE INTO notifications (id, user_id, case_id, kind, title, body, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(id, input.userId, input.caseId, input.kind, input.title, input.body, input.dedupeKey).run();
   if (!result.meta.changes) return { created: false, notificationId: null };
@@ -12,11 +14,11 @@ export async function notifyUser(input: NoticeInput): Promise<{ created: boolean
   if (!input.mobile || !env.MSG91_AUTH_KEY || !env.MSG91_FLOW_ID) {
     deliveries.push(env.DB.prepare("INSERT INTO notification_deliveries (id, notification_id, channel, status, error_code) VALUES (?, ?, 'sms', 'skipped', 'MSG91_NOT_CONFIGURED')").bind(crypto.randomUUID(), id));
     await env.DB.batch(deliveries);
-    await sendWebPush(input.userId, { title: input.title, body: input.body, url: `/cases#case-${input.caseId}`, tag: id }, id);
+    await sendWebPush(input.userId, { title: input.title, body: input.body, url: `/cases#case-${input.caseId}`, tag: id }, id, false);
     return { created: true, notificationId: id };
   }
   await env.DB.batch(deliveries);
-  await sendWebPush(input.userId, { title: input.title, body: input.body, url: `/cases#case-${input.caseId}`, tag: id }, id);
+  await sendWebPush(input.userId, { title: input.title, body: input.body, url: `/cases#case-${input.caseId}`, tag: id }, id, false);
   try {
     const response = await fetch("https://api.msg91.com/api/v5/flow/", { method: "POST", headers: { authkey: env.MSG91_AUTH_KEY, "content-type": "application/json" }, body: JSON.stringify({ template_id: env.MSG91_FLOW_ID, short_url: "0", recipients: [{ mobiles: `91${input.mobile}`, message: input.body }] }) });
     const data = await response.json().catch(() => ({})) as { request_id?: string; type?: string };

@@ -28,10 +28,21 @@ export async function googleLinked(mobile: string) {
 
 export async function beginGoogle(request: Request) {
   if (!env.DB || !googleConfigured()) return redirect(request, "/login?google=unavailable");
-  if (request.headers.get("Origin") !== new URL(request.url).origin || new URL(callbackUri()).origin !== new URL(request.url).origin) return redirect(request, "/login?google=failed");
+  const current = new URL(request.url);
+  const canonical = new URL(callbackUri()).origin;
+  if (request.method === "POST" && request.headers.get("Origin") !== current.origin) return redirect(request, "/login?google=failed");
+  if (request.method === "GET" && current.origin !== canonical) return redirect(request, "/login?google=failed");
   if (!await rateLimit(request)) return redirect(request, "/login?google=limited");
-  const data = await request.formData();
-  const purpose = data.get("purpose") === "link" ? "link" : "login";
+  const data = request.method === "GET" ? current.searchParams : await request.formData();
+  // OAuth cookies must be created on the same host as Google's registered callback.
+  // Only login may cross hosts; account linking requires the original session.
+  if (current.origin !== canonical) {
+    const target = new URL("/api/auth/google/start", canonical);
+    target.searchParams.set("role", String(data.get("role") ?? "hospital"));
+    if (data.get("purpose") === "link") return redirect(request, new URL("/login?google=canonical-link", canonical).href);
+    return redirect(request, target.href);
+  }
+  const purpose = request.method === "POST" && data.get("purpose") === "link" ? "link" : "login";
   const selected = data.get("role");
   const role: Role = selected === "anesthetist" || selected === "surgeon" ? selected : "hospital";
   const user = purpose === "link" ? await getSessionUser() : null;

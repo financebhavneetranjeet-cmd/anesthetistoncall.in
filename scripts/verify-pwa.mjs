@@ -5,7 +5,7 @@ for (const key of ["name", "short_name", "start_url", "scope", "display", "theme
   if (!manifest[key]) throw new Error(`PWA manifest is missing ${key}`);
 }
 if (manifest.display !== "standalone") throw new Error("PWA must use standalone display mode");
-if (manifest.id !== "/" || manifest.start_url !== "/" || manifest.scope !== "/") throw new Error("PWA identity and scope must remain at the origin root");
+if (manifest.id !== "/" || manifest.start_url !== "/launch" || manifest.scope !== "/") throw new Error("PWA identity and scope must remain at the origin root");
 for (const size of ["192x192", "512x512"]) {
   if (!manifest.icons.some(icon => icon.sizes === size && (icon.purpose || "any").split(" ").includes("any"))) throw new Error(`Missing general-purpose ${size} icon`);
 }

@@ -6,6 +6,7 @@ const sql = source.match(/`(SELECT n.id,n.user_id[\s\S]*?)`/)[1];
 const db = new DatabaseSync(':memory:');
 db.exec(`CREATE TABLE users(id TEXT,role TEXT,status TEXT,account_status TEXT);
 CREATE TABLE clinician_profiles(user_id TEXT,verification_status TEXT,case_notifications_enabled INTEGER,availability_status TEXT,available_until TEXT);
+CREATE TABLE availability_slots(clinician_user_id TEXT,status TEXT,start_at TEXT,end_at TEXT);
 CREATE TABLE cases(id TEXT,status TEXT);
 CREATE TABLE notifications(id TEXT,user_id TEXT,case_id TEXT,kind TEXT,title TEXT,body TEXT,dedupe_key TEXT);
 CREATE TABLE push_subscriptions(user_id TEXT);

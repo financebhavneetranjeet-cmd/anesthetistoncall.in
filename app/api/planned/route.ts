@@ -36,8 +36,9 @@ export async function POST(request: Request) {
       SELECT lower(hex(randomblob(16))),u.id,?,'planned_case','New advance case',?,'planned:'||?||':'||u.id
       FROM users u JOIN clinician_profiles cp ON cp.user_id=u.id
       WHERE u.role='anesthetist' AND u.status='verified' AND COALESCE(u.account_status,'active')='active'
-      AND cp.verification_status='verified' AND cp.case_notifications_enabled=1
-      AND cp.availability_status='available' AND datetime(cp.available_until)>CURRENT_TIMESTAMP
+      AND cp.verification_status='verified' AND (EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id AND a.status='available' AND datetime(a.start_at)<=CURRENT_TIMESTAMP AND datetime(a.end_at)>CURRENT_TIMESTAMP)
+      OR (cp.case_notifications_enabled=1 AND cp.availability_status='available' AND datetime(cp.available_until)>CURRENT_TIMESTAMP
+        AND NOT EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id)))
       AND EXISTS(SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id AND a.status IN('available','tentative') AND datetime(a.start_at)<=datetime(?) AND datetime(a.end_at)>=datetime(?,'+'||?||' minutes'))
       AND NOT EXISTS(SELECT 1 FROM cases x WHERE x.assigned_clinician_user_id=u.id AND x.booking_status='confirmed' AND datetime(x.scheduled_at)<datetime(?,'+'||(?+30)||' minutes') AND datetime(x.scheduled_at,'+'||(x.duration_minutes+x.booking_buffer_minutes)||' minutes')>datetime(?))`)
       .bind(id, `${hospital.name}: ${data.procedureName} on ${new Date(data.scheduledAt).toLocaleString("en-IN")}. Offer ₹${data.offeredFeeRupees}.`, id, data.scheduledAt, data.scheduledAt, data.durationMinutes, data.scheduledAt, data.durationMinutes, data.scheduledAt),

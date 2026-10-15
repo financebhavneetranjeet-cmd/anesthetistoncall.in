@@ -1,3 +1,4 @@
+import { feeBreakdown } from "@/lib/fee-breakdown.mjs";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import {
@@ -39,7 +40,7 @@ export async function GET(
     return jsonError("Assigned case access required.", 403);
   const [bid, rating, audit] = await Promise.all([
     env.DB.prepare(
-      "SELECT proposed_fee_paise AS proposedFeePaise FROM case_responses WHERE case_id=? AND clinician_user_id=? LIMIT 1",
+      "SELECT proposed_fee_paise AS proposedFeePaise,response_type AS responseType FROM case_responses WHERE case_id=? AND clinician_user_id=? LIMIT 1",
     )
       .bind(id, row.clinicianId)
       .first(),
@@ -56,7 +57,7 @@ export async function GET(
   ]);
   return jsonOk({
     progress: row,
-    bid: bid ?? null,
+    bid: bid ? { ...bid, proposedFeePaise: row.finalAgreedFeePaise ?? feeBreakdown(row.postedFeePaise, bid.proposedFeePaise, bid.responseType).totalFeePaise } : null,
     rating: rating ?? null,
     audit: audit.results,
     viewer: user!.role,

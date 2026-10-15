@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 const read=(path)=>readFileSync(path,"utf8");
 const caseRoute=read("app/api/cases/route.ts"),plannedRoute=read("app/api/planned/route.ts"),bidRoute=read("app/api/cases/[id]/bids/route.ts"),assignRoute=read("app/api/cases/[id]/assign/route.ts"),bell=read("components/notifications/notification-bell.tsx"),dashboard=read("app/cases/cases-dashboard.tsx");
 for(const source of [caseRoute,plannedRoute]) for(const token of ["u.role='anesthetist'","u.status='verified'","account_status","cp.verification_status='verified'","cp.case_notifications_enabled=1","cp.availability_status='available'","cp.available_until"]) assert.ok(source.includes(token),`case alert eligibility missing ${token}`);
-for(const token of ["AVAILABILITY_REQUIRED","case_notifications_enabled=1","availability_status='available'","available_until"]) assert.ok(bidRoute.includes(token),`response gate missing ${token}`);
+for(const token of ["AVAILABILITY_REQUIRED","getCurrentAnaesthetistAvailability(user.id)","isVerifiedAnaesthetist"]) assert.ok(bidRoute.includes(token),`response gate missing ${token}`);
 for(const token of ["isApprovedHospital","status='offered'","assigned_clinician_user_id","final_agreed_fee_paise","fee_locked_at"]) assert.ok(assignRoute.includes(token),`hospital selection safeguard missing ${token}`);
 for(const token of ["unreadCount","View Case","/cases#case-","Mark read"]) assert.ok(bell.includes(token),`bell workflow missing ${token}`);
 assert.ok(dashboard.includes("<NotificationBell />"),"dashboard bell must be available to hospital and anaesthetist roles");

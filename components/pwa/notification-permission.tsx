@@ -21,14 +21,15 @@ function isCriticalFlow() {
     Boolean(document.querySelector('form[data-critical-flow="true"], [aria-busy="true"]'));
 }
 
-export function NotificationPermission() {
+export function NotificationPermission({ manual = false }: { manual?: boolean }) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
   const publicKey = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!isStandalone() || !("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    if (manual) return;
+    if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
     if (Notification.permission === "denied") {
       localStorage.setItem(DECISION_KEY, "denied");
       return;
@@ -50,7 +51,7 @@ export function NotificationPermission() {
           if (saved.ok) localStorage.setItem(DECISION_KEY, "granted");
           return;
         }
-        window.setTimeout(() => { if (!cancelled && !isCriticalFlow()) setOpen(true); }, 1200);
+        if (!manual) window.setTimeout(() => { if (!cancelled && !isCriticalFlow()) setOpen(true); }, 1200);
       } catch {
         // Permission can be offered on the next safe app open.
       }
@@ -63,9 +64,32 @@ export function NotificationPermission() {
       document.removeEventListener("submit", changed, true);
       document.removeEventListener("input", changed, true);
     };
-  }, []);
+  }, [manual]);
 
-  if (!open) return null;
+  async function openSettings() {
+    setMessage("");
+    setOpen(true);
+    if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setMessage(!isStandalone() ? "For notifications on iPhone or iPad, add this site to your Home Screen and open it there." : "This browser does not support push notifications.");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setMessage("Enable in Settings: allow notifications for this site in your browser settings, then try again.");
+      return;
+    }
+    setWorking(true);
+    try {
+      const response = await fetch("/api/push-subscriptions", { cache: "no-store" });
+      const result = await response.json() as { authenticated?: boolean; publicKey?: string | null };
+      if (!response.ok || !result.authenticated) throw new Error("Sign in with your owner or admin account to enable notifications.");
+      if (!result.publicKey) throw new Error("Push notifications are not configured on the server yet.");
+      publicKey.current = result.publicKey;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not load notification settings. Please try again.");
+    } finally { setWorking(false); }
+  }
+
+  if (!open) return manual ? <button type="button" onClick={() => void openSettings()} className="m-4 rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white">Enable owner / admin notifications</button> : null;
 
   async function allowNotifications() {
     if (working || !publicKey.current || isCriticalFlow()) return;
@@ -106,7 +130,9 @@ export function NotificationPermission() {
     <section role="dialog" aria-modal="true" aria-labelledby="notification-permission-title" className="w-full max-w-sm rounded-2xl bg-white p-6 text-center text-slate-950 shadow-2xl">
       <span className="mx-auto grid size-12 place-items-center rounded-full bg-blue-50 text-blue-700"><BellRing className="size-6" aria-hidden="true" /></span>
       <h2 id="notification-permission-title" className="mt-4 text-xl font-bold">Allow notifications for this site</h2>
+      <p className="mt-2 text-sm text-slate-600">{manual ? "Receive alerts for new registrations and approval requests on this device." : "Receive app notifications on this device."}</p>
       {message ? <p role="status" className="mt-3 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-700">{message}</p> : <button type="button" disabled={working} onClick={() => void allowNotifications()} className="mt-5 min-h-12 w-full rounded-xl bg-blue-700 px-5 font-bold text-white disabled:opacity-60">{working ? "Enabling…" : "Allow Notifications"}</button>}
+      <button type="button" onClick={() => { localStorage.setItem(DECISION_KEY, "dismissed"); setOpen(false); }} className="mt-4 text-sm underline">Close</button>
     </section>
   </div>;
 }

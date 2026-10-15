@@ -1,3 +1,4 @@
+import { feeBreakdown } from "@/lib/fee-breakdown.mjs";
 import { env } from "cloudflare:workers";
 import {
   getSessionUser,
@@ -34,5 +35,5 @@ export async function GET(
         .bind(id)
         .all()
     : { results: [] };
-  const responses=manager?await Promise.all((rs.results as any[]).map(async r=>({...r,match:await scoreMatch({clinicianId:r.clinicianId,isEmergency:true,available:r.status==="available",etaMinutes:r.etaMinutes??null,offeredFeePaise:c.offeredFeePaise,bidFeePaise:r.proposedFeePaise})}))):[];return jsonOk({case:c,responses,canManage:manager});
+  const responses=manager?await Promise.all((rs.results as any[]).map(async r=>({...r,...feeBreakdown(c.offeredFeePaise,r.proposedFeePaise,r.responseType),proposedFeePaise:feeBreakdown(c.offeredFeePaise,r.proposedFeePaise,r.responseType).totalFeePaise,match:await scoreMatch({clinicianId:r.clinicianId,isEmergency:true,available:r.status==="available",etaMinutes:r.etaMinutes??null,offeredFeePaise:c.offeredFeePaise,bidFeePaise:feeBreakdown(c.offeredFeePaise,r.proposedFeePaise,r.responseType).totalFeePaise})}))):[];return jsonOk({case:c,responses,canManage:manager});
 }

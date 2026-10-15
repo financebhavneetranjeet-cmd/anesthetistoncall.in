@@ -1,3 +1,5 @@
+import { feeBreakdown } from "@/lib/fee-breakdown.mjs";
+import { getCurrentAnaesthetistAvailability } from "@/lib/server/emergency-availability-service";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import {
@@ -36,11 +38,11 @@ export async function GET(
   if (!owns) return jsonError("Case not found.", 404);
   const canViewResponderMap = user.role === "hospital" && owns.hospitalId === user.hospitalId && owns.hospitalOwnerUserId === user.id;
   const result = await env.DB.prepare(
-    "SELECT r.id,r.clinician_user_id AS clinicianId,r.proposed_fee_paise AS proposedFeePaise,r.message,r.status,r.created_at AS createdAt,r.distance_metres AS distanceMetres,r.eta_minutes AS etaMinutes,u.full_name AS clinicianName,u.role,cp.qualification,cp.verification_status AS verificationStatus,CASE WHEN ?=1 AND r.status='available' THEN r.response_latitude ELSE NULL END AS latitude,CASE WHEN ?=1 AND r.status='available' THEN r.response_longitude ELSE NULL END AS longitude FROM case_responses r JOIN users u ON u.id=r.clinician_user_id JOIN clinician_profiles cp ON cp.user_id=u.id WHERE r.case_id=? ORDER BY r.created_at ASC",
+    "SELECT r.id,r.clinician_user_id AS clinicianId,r.proposed_fee_paise AS proposedFeePaise,r.response_type AS responseType,r.message,r.status,strftime('%Y-%m-%dT%H:%M:%SZ',r.created_at) AS createdAt,r.distance_metres AS distanceMetres,r.eta_minutes AS etaMinutes,u.full_name AS clinicianName,u.role,cp.qualification,cp.verification_status AS verificationStatus,CASE WHEN ?=1 AND r.status='available' THEN r.response_latitude ELSE NULL END AS latitude,CASE WHEN ?=1 AND r.status='available' THEN r.response_longitude ELSE NULL END AS longitude FROM case_responses r JOIN users u ON u.id=r.clinician_user_id JOIN clinician_profiles cp ON cp.user_id=u.id WHERE r.case_id=? ORDER BY r.created_at ASC",
   )
     .bind(canViewResponderMap ? 1 : 0, canViewResponderMap ? 1 : 0, id)
     .all();
-  const bids=await Promise.all((result.results as any[]).map(async r=>({...r,match:await scoreMatch({clinicianId:r.clinicianId,isEmergency:Boolean(owns.isEmergency),available:r.status==="available",etaMinutes:r.etaMinutes??null,offeredFeePaise:owns.offeredFeePaise,bidFeePaise:r.proposedFeePaise}),reliability:await reliabilityFor(r.clinicianId)})));
+  const bids=await Promise.all((result.results as any[]).map(async r=>({...r,...feeBreakdown(owns.offeredFeePaise,r.proposedFeePaise,r.responseType),match:await scoreMatch({clinicianId:r.clinicianId,isEmergency:Boolean(owns.isEmergency),available:r.status==="available",etaMinutes:r.etaMinutes??null,offeredFeePaise:owns.offeredFeePaise,bidFeePaise:feeBreakdown(owns.offeredFeePaise,r.proposedFeePaise,r.responseType).totalFeePaise}),reliability:await reliabilityFor(r.clinicianId)})));
   const hospitalLatitude=Number(owns.hospitalLatitude),hospitalLongitude=Number(owns.hospitalLongitude);
   const map=canViewResponderMap&&Number.isFinite(hospitalLatitude)&&Number.isFinite(hospitalLongitude)?{hospital:{name:owns.hospitalName,latitude:hospitalLatitude,longitude:hospitalLongitude}}:null;
   return jsonOk({bids,map});
@@ -53,17 +55,17 @@ export async function POST(
   const user = await getSessionUser();
   if (!isVerifiedAnaesthetist(user))
     return jsonError("Verified anaesthetist access required.", 403);
-  const availability = await env.DB.prepare("SELECT 1 AS eligible FROM clinician_profiles WHERE user_id=? AND verification_status='verified' AND case_notifications_enabled=1 AND availability_status='available' AND datetime(available_until)>CURRENT_TIMESTAMP").bind(user.id).first();
-  if (!availability) return jsonError("Turn on Available Now before responding to a case.", 409, "AVAILABILITY_REQUIRED");
+  const availability = await getCurrentAnaesthetistAvailability(user.id);
+  if (!availability) return jsonError("Your saved availability is not active now. Open Show Your Availability and save a period covering the current time.", 409, "AVAILABILITY_REQUIRED");
   const parsed = bidSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success)
     return jsonError(parsed.error.issues[0]?.message ?? "Invalid bid.");
   const { id } = await params;
   const open = await env.DB.prepare(
-    "SELECT c.id,c.hospital_id AS hospitalId,c.bidding_enabled AS biddingEnabled,h.latitude AS hospitalLatitude,h.longitude AS hospitalLongitude FROM cases c JOIN hospitals h ON h.id=c.hospital_id WHERE c.id = ? AND c.status = 'open'",
+    "SELECT c.id,c.hospital_id AS hospitalId,c.bidding_enabled AS biddingEnabled,c.offered_fee_paise AS offeredFeePaise,h.latitude AS hospitalLatitude,h.longitude AS hospitalLongitude FROM cases c JOIN hospitals h ON h.id=c.hospital_id WHERE c.id = ? AND c.status = 'open'",
   )
     .bind(id)
-    .first<{ id: string; hospitalId: string; biddingEnabled: number; hospitalLatitude:string|null; hospitalLongitude:string|null }>();
+    .first<{ id: string; hospitalId: string; biddingEnabled: number; offeredFeePaise: number; hospitalLatitude:string|null; hospitalLongitude:string|null }>();
   if (!open) return jsonError("This case is not open for responses.", 409);
   if (parsed.data.proposedFeeRupees && !open.biddingEnabled)
     return jsonError(
@@ -81,7 +83,7 @@ export async function POST(
     if(route){distanceMetres=route.distanceMetres||distanceMetres;etaMinutes=Math.max(1,Math.round(route.durationSeconds/60));}
   }
   await env.DB.prepare(
-    "INSERT INTO case_responses (id, case_id, clinician_user_id, proposed_fee_paise, message, status, distance_metres, eta_minutes, response_latitude, response_longitude, location_captured_at) VALUES (?, ?, ?, ?, ?, 'available', ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END) ON CONFLICT(case_id, clinician_user_id) DO UPDATE SET proposed_fee_paise = COALESCE(excluded.proposed_fee_paise, case_responses.proposed_fee_paise), message = excluded.message, status = 'available', distance_metres=COALESCE(excluded.distance_metres,case_responses.distance_metres),eta_minutes=COALESCE(excluded.eta_minutes,case_responses.eta_minutes),response_latitude=COALESCE(excluded.response_latitude,case_responses.response_latitude),response_longitude=COALESCE(excluded.response_longitude,case_responses.response_longitude),location_captured_at=COALESCE(excluded.location_captured_at,case_responses.location_captured_at),updated_at = CURRENT_TIMESTAMP",
+    "INSERT INTO case_responses (id, case_id, clinician_user_id, proposed_fee_paise, message, status, distance_metres, eta_minutes, response_latitude, response_longitude, location_captured_at) VALUES (?, ?, ?, ?, ?, 'available', ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END) ON CONFLICT(case_id, clinician_user_id) DO UPDATE SET proposed_fee_paise = COALESCE(excluded.proposed_fee_paise, case_responses.proposed_fee_paise), message = excluded.message, response_type = CASE WHEN excluded.proposed_fee_paise IS NOT NULL THEN NULL ELSE case_responses.response_type END, status = 'available', distance_metres=COALESCE(excluded.distance_metres,case_responses.distance_metres),eta_minutes=COALESCE(excluded.eta_minutes,case_responses.eta_minutes),response_latitude=COALESCE(excluded.response_latitude,case_responses.response_latitude),response_longitude=COALESCE(excluded.response_longitude,case_responses.response_longitude),location_captured_at=COALESCE(excluded.location_captured_at,case_responses.location_captured_at),updated_at = CURRENT_TIMESTAMP",
   )
     .bind(
       crypto.randomUUID(),
@@ -110,7 +112,7 @@ export async function POST(
       kind: "case_response",
       title: "Anaesthetist available",
       body: parsed.data.proposedFeeRupees
-        ? `${user.fullName} is available and proposed a fee.`
+        ? `${user.fullName} is available. Hospital fee ₹${open.offeredFeePaise / 100} + extra bid ₹${parsed.data.proposedFeeRupees} = total ₹${open.offeredFeePaise / 100 + parsed.data.proposedFeeRupees}.`
         : `${user.fullName} is available for this case.`,
       dedupeKey: `response:${id}:${user.id}:${parsed.data.proposedFeeRupees ?? "available"}:${parsed.data.message ?? ""}`,
       mobile: owner.mobile,

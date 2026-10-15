@@ -5,7 +5,14 @@ export const RELEASES = [
   { version: "1.4", name: "Multi-Role Accounts" },
   { version: "1.5", name: "Easy Availability" },
   { version: "1.6", name: "Available Anaesthetist Push Alerts" },
-  { version: "1.7", name: "Simpler Case Posting" },
+  { version: "1.7", name: "Clear Dashboard Controls" },
+  { version: "1.8", name: "Remembered Mobile Login" },
+  { version: "1.9", name: "Owner and Admin Push Tests" },
+  { version: "1.10", name: "Manual Map Refresh and Accurate Response Times" },
+  { version: "1.11", name: "Automatic Installed App Updates" },
+  { version: "1.12", name: "Hospital Fee Plus Additional Bid" },
+  { version: "1.13", name: "Named Anaesthetist Selection Confirmation" },
+  { version: "1.14", name: "Clearer Forms and Simpler Case Posting" },
 ] as const;
 
 export const CURRENT_RELEASE = RELEASES.at(-1)!;

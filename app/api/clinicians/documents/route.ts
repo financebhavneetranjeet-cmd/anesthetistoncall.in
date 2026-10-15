@@ -1,4 +1,5 @@
-import { env } from "cloudflare:workers";
+import { notifyAdminsOfRegistration } from "@/lib/server/web-push";
+import { env, waitUntil } from "cloudflare:workers";
 import { getSessionUser } from "@/lib/server/session";
 import { jsonError, jsonOk } from "@/lib/server/http";
 
@@ -18,5 +19,8 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   try { await env.DB.prepare("INSERT INTO verification_documents (id, user_id, object_key, file_name, content_type, size_bytes, document_type) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(id, user.id, objectKey, file.name, file.type, file.size, documentType).run(); }
   catch (error) { await env.BUCKET.delete(objectKey); throw error; }
+  waitUntil(notifyAdminsOfRegistration({ id: user.clinicianId, role: user.role as "anesthetist" | "surgeon", name: user.fullName, approvalRequestId: id }).catch(error => {
+    console.error("Admin approval request push failed", { documentId: id, reason: error instanceof Error ? error.name : "UNKNOWN" });
+  }));
   return jsonOk({ document: { id, fileName: file.name, documentType } }, 201);
 }

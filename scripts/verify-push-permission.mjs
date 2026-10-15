@@ -13,12 +13,14 @@ for (const marker of ["getSessionUser", "hasActiveAccount", "ON CONFLICT(endpoin
 for (const marker of ['self.addEventListener("push"', 'self.addEventListener("notificationclick"', "showNotification"])
   assert.ok(worker.includes(marker), `service worker missing ${marker}`);
 
-const shouldPrompt = ({ standalone, supported, permission, decision, authenticated, subscribed, critical }) =>
-  standalone && supported && permission === "default" && !decision && authenticated && !subscribed && !critical;
-assert.equal(shouldPrompt({ standalone: true, supported: true, permission: "default", decision: null, authenticated: true, subscribed: false, critical: false }), true, "default path should prompt once");
-assert.equal(shouldPrompt({ standalone: true, supported: true, permission: "denied", decision: "denied", authenticated: true, subscribed: false, critical: false }), false, "denied path must not loop");
-assert.equal(shouldPrompt({ standalone: true, supported: true, permission: "granted", decision: "granted", authenticated: true, subscribed: true, critical: false }), false, "granted path must not reprompt");
-assert.equal(shouldPrompt({ standalone: true, supported: true, permission: "default", decision: null, authenticated: true, subscribed: false, critical: true }), false, "critical flow must suppress prompt");
+// A subscription on another device must never prevent this device enrolling.
+assert.ok(!component.includes("|| result.subscribed"));
+assert.ok(!component.includes("if (!isStandalone()"));
+assert.ok(component.includes("async function openSettings()"));
+assert.ok(readFileSync("app/admin/page.tsx", "utf8").includes("<NotificationPermission manual />"));
+const documentRoute = readFileSync("app/api/clinicians/documents/route.ts", "utf8");
+assert.ok(documentRoute.indexOf("approvalRequestId: id") > documentRoute.indexOf("INSERT INTO verification_documents"));
+assert.ok(documentRoute.includes("waitUntil(notifyAdminsOfRegistration"));
 
 const db = new DatabaseSync(":memory:");
 db.exec("CREATE TABLE users(id TEXT PRIMARY KEY); INSERT INTO users VALUES ('u1'),('u2');" + readFileSync("drizzle/0027_push_subscriptions.sql", "utf8").replaceAll("--> statement-breakpoint", ""));

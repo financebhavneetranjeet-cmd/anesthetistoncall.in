@@ -31,3 +31,8 @@ export async function getEmergencyAvailableAnaesthetists(options: { includeRanki
   }));
   return available.sort((a, b) => b.ranking - a.ranking || (b.rating ?? 0) - (a.rating ?? 0) || a.availableUntil.localeCompare(b.availableUntil));
 }
+
+export async function getCurrentAnaesthetistAvailability(userId: string) {
+  if (!env.DB) throw new Error("Availability database unavailable.");
+  return env.DB.prepare(`SELECT * FROM (${EMERGENCY_AVAILABLE_ANAESTHETISTS_SQL}) WHERE clinicianId=?`).bind(userId).first<EligibleRow>();
+}

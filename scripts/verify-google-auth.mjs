@@ -34,6 +34,13 @@ const snapshot=()=>JSON.stringify({users:db.prepare("SELECT id,mobile,role,statu
 let total=0;async function test(name,fn){db.exec("DELETE FROM google_auth_limits");claims={};invalidSignature=false;await fn();total++;console.log(`PASS ${name}`);}
 user("existing","9000000001");
 await test("unlinked Google never creates a user or trusts a matching unverified email",async()=>{db.exec("UPDATE users SET email='verified@example.com' WHERE id='existing'");const before=snapshot(),url=await start();assert.equal(location(await api.finishGoogle(callback(url))),"/login?google=link-required");assert.equal(snapshot(),before);});
+await test("alternate site continues login on callback host with selected role",async()=>{
+ const alias="https://anesthetist-on-call-foundation.drbhavneets.chatgpt.site";
+ const body=new FormData();body.set("role","anesthetist");body.set("purpose","login");
+ const r=await api.beginGoogle(new Request(`${alias}/api/auth/google/start`,{method:"POST",headers:{Origin:alias},body}));
+ const target=new URL(r.headers.get("Location"));assert.equal(target.origin,origin);assert.equal(target.searchParams.get("role"),"anesthetist");
+ const next=await api.beginGoogle(new Request(target));assert.equal(new URL(next.headers.get("Location")).hostname,"accounts.google.com");
+});
 await test("linking requires the existing authenticated account",async()=>{assert.equal(location(await begin("link")),"/login?google=link-required");});
 await test("verified Google links to SAME account without role/profile/approval changes",async()=>{await api.createSession("existing");const before=snapshot(),url=await start("link");assert.equal(url.searchParams.get("code_challenge_method"),"S256");assert.equal(url.searchParams.get("scope"),"openid email");assert.equal(location(await api.finishGoogle(callback(url))),"/account/google?google=linked");assert.equal(snapshot(),before);assert.equal(db.prepare("SELECT mobile FROM google_identities WHERE subject='google-1'").get().mobile,"9000000001");});
 await test("subsequent Google login opens the existing account",async()=>{await api.clearSession();const url=await start();assert.equal(location(await api.finishGoogle(callback(url))),"/cases");assert.equal((await api.getSessionUser()).id,"existing");});

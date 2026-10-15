@@ -1,3 +1,4 @@
+import { publishAdminNotice } from "@/lib/server/web-push";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import { validateAvailabilityRange } from "@/lib/availability-time";
@@ -21,6 +22,8 @@ export async function GET() {
   if (!isVerifiedClinician(u) && !isApprovedHospital(u))
     return jsonError("Verified access required.", 403);
   await env.DB.prepare(`INSERT OR IGNORE INTO notifications(id,user_id,case_id,kind,title,body,dedupe_key) SELECT lower(hex(randomblob(16))),c.assigned_clinician_user_id,c.id,'booking_reminder','Upcoming case reminder',h.name||': '||c.procedure_name||' at '||c.scheduled_at,'booking_reminder:'||c.id||':'||CASE WHEN datetime(c.scheduled_at)<=datetime('now','+30 minutes') THEN 'near' WHEN datetime(c.scheduled_at)<=datetime('now','+2 hours') THEN '2h' ELSE '24h' END FROM cases c JOIN hospitals h ON h.id=c.hospital_id WHERE c.is_planned=1 AND c.booking_status='confirmed' AND c.assigned_clinician_user_id IS NOT NULL AND datetime(c.scheduled_at)>CURRENT_TIMESTAMP AND datetime(c.scheduled_at)<=datetime('now','+24 hours')`).run();
+  const reminders = await env.DB.prepare("SELECT case_id AS caseId,title,body,dedupe_key AS eventKey FROM notifications WHERE kind='booking_reminder' AND datetime(created_at)>datetime('now','-1 day')").all<{caseId:string;title:string;body:string;eventKey:string}>();
+  await Promise.all(reminders.results.map(notice => publishAdminNotice({title:notice.title,body:notice.body,url:"/admin",tag:notice.eventKey},notice.eventKey,notice.caseId)));
   if (isVerifiedClinician(u) && u.role === "anesthetist") {
     const slots = await env.DB.prepare(
       "SELECT id,status,start_at AS startAt,end_at AS endAt,preferred_area AS preferredArea FROM availability_slots WHERE clinician_user_id=? AND datetime(end_at)>CURRENT_TIMESTAMP ORDER BY start_at",

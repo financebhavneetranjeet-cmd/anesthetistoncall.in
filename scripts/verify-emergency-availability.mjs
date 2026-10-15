@@ -58,3 +58,15 @@ db.prepare("UPDATE clinician_profiles SET availability_location_at=CURRENT_TIMES
 const sharedDto = toEmergencyAvailabilityDto(db.prepare(fixedSql).all()[0], {score:0,metrics:{rating:0,ratingCount:0}});
 assert.equal(sharedDto.approximateLocation.latitude,31.63);
 assert.equal(sharedDto.approximateLocation.longitude,74.87);
+
+// Calendar availability must allow responses even when the legacy toggle is off.
+db.prepare("UPDATE clinician_profiles SET availability_status='unavailable',available_until=NULL WHERE user_id='eligible'").run();
+const responseSql = `SELECT * FROM (${fixedSql}) WHERE clinicianId=?`;
+assert.equal(db.prepare(responseSql).get('eligible').clinicianId, 'eligible');
+assert.equal(db.prepare(responseSql).get('blocked'), undefined);
+const bids = readFileSync('app/api/cases/[id]/bids/route.ts','utf8');
+assert.match(bids, /getCurrentAnaesthetistAvailability\(user.id\)/);
+assert.ok(!bids.includes('case_notifications_enabled=1'));
+db.prepare("UPDATE availability_slots SET end_at='2026-10-09T18:59:00Z' WHERE clinician_user_id='eligible'").run();
+assert.equal(db.prepare(responseSql).get('eligible'), undefined, 'expired availability cannot respond');
+console.log('Case response eligibility uses saved calendar availability and rejects expired or blocked accounts.');

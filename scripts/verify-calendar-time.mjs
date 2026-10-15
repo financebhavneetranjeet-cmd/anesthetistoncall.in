@@ -10,7 +10,7 @@ const db = new DatabaseSync(':memory:');
 db.exec(`CREATE TABLE availability_slots(id TEXT PRIMARY KEY, clinician_user_id TEXT, status TEXT, start_at TEXT, end_at TEXT, preferred_area TEXT, updated_at TEXT);`);
 const user = { id: 'test-anaesthetist', role: 'anesthetist' };
 globalThis.__calendarTest = { z, ...time, env: { DB: { prepare(sql) {
-  if (sql.includes('notifications')) return { run: async () => ({}) };
+  if (sql.includes('notifications')) return { run: async () => ({}), all: async () => ({ results: [] }) };
   if (sql.includes('FROM cases')) return { bind: () => ({ all: async () => ({ results: [] }) }) };
   const stmt = db.prepare(sql);
   return { bind: (...args) => ({ run: async () => stmt.run(...args), all: async () => ({ results: stmt.all(...args) }) }) };

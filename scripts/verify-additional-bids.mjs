@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {feeBreakdown} from '../lib/fee-breakdown.mjs';
+assert.deepEqual(feeBreakdown(350000,50000),{hospitalFeePaise:350000,additionalFeePaise:50000,totalFeePaise:400000});
+assert.equal(feeBreakdown(350000,null).totalFeePaise,350000);
+assert.equal(feeBreakdown(350000,400000,'bid').totalFeePaise,400000,'SOS totals are not added twice');
+assert.equal(feeBreakdown(350000,350000,'accept_offer').additionalFeePaise,0);
+assert.equal(feeBreakdown(0,50000).totalFeePaise,50000);
+for(const p of ['app/api/cases/[id]/assign/route.ts','app/api/cases/[id]/bids/route.ts']) assert.ok(readFileSync(p,'utf8').includes('feeBreakdown('));
+assert.ok(readFileSync('app/api/cases/[id]/assign/route.ts','utf8').includes('fee_locked_at IS NULL'));
+assert.ok(readFileSync('app/api/emergency/[id]/respond/route.ts','utf8').includes('c.offeredFeePaise+p.data.feeRupees!*100'));
+assert.ok(readFileSync('app/api/cases/[id]/incidents/route.ts','utf8').includes('s.revised_offer_fee_paise+d.feeRupees!*100'));
+console.log('Hospital fee plus additional bid: ₹3500 + ₹500 = ₹4000; no bid, zero offer, SOS totals, replacement totals and locked-fee preservation passed.');

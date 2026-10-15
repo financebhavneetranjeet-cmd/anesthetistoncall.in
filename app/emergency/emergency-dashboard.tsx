@@ -204,7 +204,7 @@ export function EmergencyDashboard({ role }: { role: string }) {
                   <button
                     disabled={busy === c.id}
                     onClick={() => {
-                      const fee = Number(prompt("Enter your fee quote in ₹"));
+                      const fee = Number(prompt("Enter additional bid above the hospital offer in ₹"));
                       if (fee > 0) void respond(c.id, "bid", fee);
                     }}
                     className="min-h-12 rounded-xl border border-blue-700 px-3 font-bold text-blue-800"
@@ -437,7 +437,7 @@ function Comparison({
             <th>ETA</th>
             <th>Distance</th>
             <th>Hospital offer</th>
-            <th>Response / bid</th>
+            <th>Additional bid / total demanded fee</th>
             <th>Smart match</th>
             <th></th>
           </tr>
@@ -456,15 +456,15 @@ function Comparison({
                   ? `${(r.distanceMetres / 1000).toFixed(1)} km`
                   : "Unavailable"}
               </td>
-              <td><b className="text-blue-700">{r.match?.score ?? "—"}/100</b><br/><span className="text-xs text-slate-500">{r.match?.reasons.join(" • ")}</span></td>
               <td>{money(offered)}</td>
               <td>
                 {r.responseType === "decline"
                   ? "Declined"
                   : r.responseType === "accept_offer"
                     ? "Accepted offer"
-                    : money(r.proposedFeePaise ?? offered)}
+                    : `Extra ${money((r.proposedFeePaise ?? offered)-offered)} · Total ${money(r.proposedFeePaise ?? offered)}`}
               </td>
+              <td><b className="text-blue-700">{r.match?.score ?? "—"}/100</b><br/><span className="text-xs text-slate-500">{r.match?.reasons.join(" • ")}</span></td>
               <td className="p-2">
                 {r.status === "available" && (
                   <button

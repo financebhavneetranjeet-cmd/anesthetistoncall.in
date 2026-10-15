@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
 type Point = { approximateLocation: { latitude: number; longitude: number; precision: "approximate" } | null };
 type Maps = { Map: new(element: HTMLElement, options: object) => unknown; Marker: new(options: object) => unknown; LatLngBounds: new() => { extend(point: { lat: number; lng: number }): void } };
@@ -18,26 +19,9 @@ export function EmergencyAvailabilityMap({ anaesthetists }: { anaesthetists: Poi
         const response = await fetch("/api/places/config");
         const payload = await response.json() as { apiKey?: string; error?: { message?: string } };
         if (!response.ok || !payload.apiKey) throw new Error(payload.error?.message ?? "Map is unavailable.");
-        const browserWindow = window as Window & { google?: { maps?: Maps } };
-        if (!browserWindow.google?.maps) {
-          await new Promise<void>((resolve, reject) => {
-            const existing = document.getElementById("emergency-availability-map-script") as HTMLScriptElement | null;
-            if (existing) {
-              existing.addEventListener("load", () => resolve(), { once: true });
-              existing.addEventListener("error", () => reject(new Error("Map could not load.")), { once: true });
-              return;
-            }
-            const script = document.createElement("script");
-            script.id = "emergency-availability-map-script";
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(payload.apiKey)}&loading=async`;
-            script.async = true;
-            script.onload = () => resolve();
-            script.onerror = () => reject(new Error("Map could not load."));
-            document.head.appendChild(script);
-          });
-        }
-        if (!active || !element.current || !browserWindow.google?.maps) return;
-        const maps = browserWindow.google.maps;
+        const maps = await loadGoogleMaps<Maps>(payload.apiKey);
+        if (!active || !element.current) return;
+        setError("");
         const bounds = new maps.LatLngBounds();
         const map = new maps.Map(element.current, { center: { lat: points[0].latitude, lng: points[0].longitude }, zoom: 12, mapTypeControl: false, streetViewControl: false, fullscreenControl: false });
         points.forEach((point) => {

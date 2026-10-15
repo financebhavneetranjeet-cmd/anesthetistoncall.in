@@ -38,7 +38,9 @@ export async function alertEligibleAnaesthetists(
     `INSERT OR IGNORE INTO notifications (id,user_id,case_id,kind,title,body,dedupe_key)
  SELECT lower(hex(randomblob(16))),u.id,?,'sos_alert','🚨 Emergency / SOS Case',?,'sos:'||?||':'||?||':'||u.id
  FROM users u JOIN clinician_profiles cp ON cp.user_id=u.id JOIN cases c ON c.id=? JOIN hospitals h ON h.id=c.hospital_id
- WHERE u.role='anesthetist' AND u.status='verified' AND COALESCE(u.account_status,'active')='active' AND cp.verification_status='verified' AND cp.case_notifications_enabled=1 AND cp.availability_status='available' AND datetime(cp.available_until)>CURRENT_TIMESTAMP
+ WHERE u.role='anesthetist' AND u.status='verified' AND COALESCE(u.account_status,'active')='active' AND cp.verification_status='verified' AND (EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id AND a.status='available' AND datetime(a.start_at)<=CURRENT_TIMESTAMP AND datetime(a.end_at)>CURRENT_TIMESTAMP)
+      OR (cp.case_notifications_enabled=1 AND cp.availability_status='available' AND datetime(cp.available_until)>CURRENT_TIMESTAMP
+        AND NOT EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id)))
  AND (cp.availability_latitude IS NULL OR (ABS(CAST(cp.availability_latitude AS REAL)-CAST(h.latitude AS REAL)) <= c.sos_search_radius_km/111.0 AND ABS(CAST(cp.availability_longitude AS REAL)-CAST(h.longitude AS REAL)) <= c.sos_search_radius_km/95.0))`,
   )
     .bind(caseId, body, caseId, offerVersion, caseId)

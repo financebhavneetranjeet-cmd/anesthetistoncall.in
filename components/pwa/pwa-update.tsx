@@ -82,6 +82,7 @@ export function PwaUpdate() {
   const busy = useRef(false);
   const dirty = useRef(false);
   const pendingRelease = useRef<Release | null>(null);
+  const autoAttempted = useRef<string | null>(null);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -148,6 +149,15 @@ export function PwaUpdate() {
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    const installed = window.matchMedia("(display-mode: standalone)").matches
+      || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    if (!installed || !available || document.visibilityState !== "visible"
+      || busy.current || dirty.current || autoAttempted.current === available.version) return;
+    autoAttempted.current = available.version;
+    void updateNow();
+  }, [available]);
 
   if (!available) return null;
 

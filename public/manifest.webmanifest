@@ -3,7 +3,7 @@
   "short_name": "Anaesthesia Call",
   "description": "Secure coordination for verified hospitals, anaesthetists and surgeons in Amritsar.",
   "id": "/",
-  "start_url": "/",
+  "start_url": "/launch",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",

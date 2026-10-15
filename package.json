@@ -9,12 +9,13 @@
     "install:ci": "node scripts/install-ci.mjs",
     "verify:core-features": "node scripts/verify-core-features.mjs",
     "verify:auth-flow": "node scripts/verify-auth-flow.mjs",
-    "prebuild": "node scripts/verify-simplified-case-posting.mjs && npm run verify:core-features && npm run verify:auth-flow && node scripts/verify-pmc-workflow.mjs && node scripts/verify-approval-sms.mjs && node scripts/verify-hospital-approval-notification.mjs && node scripts/verify-case-posting-sms.mjs && node scripts/verify-task16.mjs && node scripts/verify-task17.mjs && node scripts/verify-task18.mjs && node scripts/verify-task20.mjs && node scripts/verify-task21.mjs && node scripts/verify-task22.mjs && node scripts/verify-task23.mjs && node scripts/verify-task24.mjs && node scripts/verify-emergency-availability.mjs && node scripts/verify-availability-notifications.mjs && node scripts/verify-case-workflow-e2e.mjs && node scripts/verify-pwa.mjs && node scripts/verify-push-permission.mjs",
+    "prebuild": "node scripts/verify-simplified-case-posting.mjs && npm run verify:persistent-session && npm run verify:core-features && npm run verify:auth-flow && node scripts/verify-pmc-workflow.mjs && node scripts/verify-approval-sms.mjs && node scripts/verify-hospital-approval-notification.mjs && node scripts/verify-case-posting-sms.mjs && node scripts/verify-task16.mjs && node scripts/verify-task17.mjs && node scripts/verify-task18.mjs && node scripts/verify-task20.mjs && node scripts/verify-task21.mjs && node scripts/verify-task22.mjs && node scripts/verify-task23.mjs && node scripts/verify-task24.mjs && node scripts/verify-emergency-availability.mjs && node scripts/verify-availability-notifications.mjs && node scripts/verify-case-workflow-e2e.mjs && node scripts/verify-pwa.mjs && node scripts/verify-push-permission.mjs",
     "dev": "node scripts/run-framework.mjs dev",
     "build": "node scripts/run-framework.mjs build",
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "verify:persistent-session": "node scripts/verify-persistent-session.mjs && node scripts/verify-session-continuity.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
