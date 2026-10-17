@@ -67,7 +67,7 @@ class SyncTests(unittest.TestCase):
     def invoke(self, fail=False):
         real_run = subprocess.run
         def commands(*args, **kwargs):
-            if args[0][0] not in ('npm', 'node'):
+            if Path(args[0][0]).name not in ('npm', 'npm.cmd', 'node'):
                 return real_run(*args, **kwargs)
             if fail:
                 raise subprocess.CalledProcessError(1, args[0])

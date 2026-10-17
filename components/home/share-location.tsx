@@ -6,19 +6,33 @@ import { MapPin } from "lucide-react";
 export function ShareLocation({ onUpdated }: { onUpdated?: () => void }) {
   const [shared, setShared] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [message, setMessage] = useState("");
   useEffect(() => {
     const controller = new AbortController();
+    let active = true;
+    const timeout = setTimeout(() => {
+      controller.abort();
+      if (active) {
+        setChecking(false);
+        setMessage("Location status could not be checked. You can retry with Mark My Location or stop sharing below.");
+      }
+    }, 10000);
     fetch("/api/availability/location", {cache:"no-store", signal: controller.signal}).then(async response => {
-      const result = await response.json();
-      if (response.ok) setShared(Boolean(result.locationShared));
-    }).catch(() => {}).finally(() => setChecking(false));
-    return () => controller.abort();
+      const result = await response.json() as { locationShared?: boolean };
+      if (!response.ok) throw new Error("Location status unavailable.");
+      if (active) setShared(Boolean(result.locationShared));
+    }).catch(() => {
+      if (active) setMessage("Location status could not be checked. Please retry with Mark My Location or Stop Sharing Location.");
+    }).finally(() => {
+      clearTimeout(timeout);
+      if (active) setChecking(false);
+    });
+    return () => { active = false; clearTimeout(timeout); controller.abort(); };
   }, []);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
   async function save(body: object) {
     const response = await fetch("/api/availability/location", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
-    const result = await response.json();
+    const result = await response.json() as { locationShared?: boolean; error?: { message?: string } };
     if (!response.ok) throw new Error(result.error?.message ?? "Unable to save location. Please retry.");
     setShared(Boolean(result.locationShared));
     onUpdated?.();

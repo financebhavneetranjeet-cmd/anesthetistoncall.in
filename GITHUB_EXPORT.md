@@ -1,18 +1,12 @@
 # Anesthetist on Call
 
-Source export of published ChatGPT Sites version 122 (PWA 1.14).
+Published Sites version 123, PWA 1.16.
 
-Sites source commit: `5e1a5b7a1f7642918a4275c3d42679ab1647b8c6`
+Source: `f70f0f2c4f05c07346ad80b0f655dc36f403ff11`
 
-Existing project: `appgprj_6aa15e229eb8819183ce0683ef0a4d8c`
+Publication: 2026-10-17T14:01:05.667667+00:00
 
 Website: https://anesthetistoncall.in
 
-Application source and Sites deployment configuration match that release.
-Runtime credentials and live database records remain in Sites and are not exported.
-Historical deployment archives and generated TypeScript build state are excluded.
-GitHub-specific ignore rules are retained.
-
-This is a source synchronisation snapshot. GitHub pushes do not automatically deploy
-or synchronise to the separate Sites source repository. No deployment is performed
-by this export. Continue publishing through the existing Sites project.
+Runtime secrets/data remain in Sites. Export excludes historical archives and build caches.
+GitHub pushes do not deploy the website. See tools/sites-sync/README.md.

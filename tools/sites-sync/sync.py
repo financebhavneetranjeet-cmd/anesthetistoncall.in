@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 
@@ -144,7 +145,10 @@ def execute(args):
                 'Website: https://anesthetistoncall.in\n\n'
                 'Runtime secrets/data remain in Sites. Export excludes historical archives and build caches.\n'
                 'GitHub pushes do not deploy the website. See tools/sites-sync/README.md.\n')
-            subprocess.run(['npm', 'run', 'install:ci'], cwd=checkout, check=True)
+            npm = shutil.which('npm.cmd' if os.name == 'nt' else 'npm')
+            if not npm:
+                raise RuntimeError('npm is required on PATH for source verification')
+            subprocess.run([npm, 'run', 'install:ci'], cwd=checkout, check=True)
             for check in checks:
                 subprocess.run(['node', check], cwd=checkout, check=True)
             git(checkout, 'add', '-A')

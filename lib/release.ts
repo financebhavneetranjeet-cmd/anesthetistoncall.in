@@ -13,6 +13,8 @@ export const RELEASES = [
   { version: "1.12", name: "Hospital Fee Plus Additional Bid" },
   { version: "1.13", name: "Named Anaesthetist Selection Confirmation" },
   { version: "1.14", name: "Clearer Forms and Simpler Case Posting" },
+  { version: "1.15", name: "Simpler Anaesthetist Dashboard" },
+  { version: "1.16", name: "Accurate History and Reliable Location Controls" },
 ] as const;
 
 export const CURRENT_RELEASE = RELEASES.at(-1)!;

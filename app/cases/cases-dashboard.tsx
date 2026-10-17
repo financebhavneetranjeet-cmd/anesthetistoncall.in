@@ -26,7 +26,7 @@ type CaseItem = {
   currentProposedFeePaise: number | null;
   assignedClinicianUserId: string | null;
   assignedClinicianName: string | null;
-  hospitalReliability?: {score:number;rating:number;ratingCount:number;paymentReliability:number;completedCases:number};
+  hospitalReliability?: {score:number|null;rating:number;ratingCount:number;paymentReliability:number|null;completedCases:number};
 };
 type ResponseItem = {
   id: string;
@@ -45,7 +45,7 @@ type ResponseItem = {
   latitude: string | null;
   longitude: string | null;
   match?: { score:number; reasons:string[]; dataState:string };
-  reliability?: { score:number;rating:number;ratingCount:number;completedCases:number;arrivalPerformance:string };
+  reliability?: { score:number|null;rating:number;ratingCount:number;completedCases:number;arrivalPerformance:string };
 };
 type ResponseMap={hospital:{name:string;latitude:number;longitude:number}};
 
@@ -137,7 +137,7 @@ export function CasesDashboard({
           </div>
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:gap-3">
             <button type="button" onClick={()=>window.location.reload()} className="grid min-h-11 place-items-center rounded-xl border border-blue-300 bg-blue-50 px-4 py-2 font-semibold text-blue-800">Refresh page</button>
-            <NotificationBell />
+            {role !== "anesthetist" && <NotificationBell />}
             {role === "hospital" || role === "surgeon" ? (
               (role === "surgeon" || approved) && <Link href={role === "surgeon" ? "/planned" : "/cases/new"} className="grid min-h-12 place-items-center rounded-xl bg-blue-700 px-4 py-2 font-semibold text-white">Post a Case</Link>
             ) : <>
@@ -147,20 +147,20 @@ export function CasesDashboard({
             >
               Show Your Availability
             </Link>
-            {role === "anesthetist" && <Link href="/performance" className="grid min-h-11 place-items-center rounded-xl border border-[#4CAF50] aoc-light-green bg-[#E8F5E9] px-4 py-2 font-semibold text-[#1B5E20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B5E20]">My performance</Link>}
             <Link
               href="/payments"
               className="grid min-h-11 place-items-center rounded-xl border border-[#4CAF50] aoc-light-green bg-[#E8F5E9] px-4 py-2 font-semibold text-[#1B5E20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B5E20]"
             >
               Payments
             </Link>
-            {role === "anesthetist" && <Link href="/reviews" className="grid min-h-11 place-items-center rounded-xl border border-[#4CAF50] aoc-light-green bg-[#E8F5E9] px-4 py-2 font-semibold text-[#1B5E20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B5E20]">Ratings</Link>}
+            {role !== "anesthetist" && (
             <Link
               href="/notifications"
               className="grid min-h-11 place-items-center rounded-xl border border-[#4CAF50] aoc-light-green bg-[#E8F5E9] px-4 py-2 font-semibold text-[#1B5E20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B5E20]"
             >
               Notifications
             </Link>
+            )}
             {role === "anesthetist" && (
               <Link
                 href="/emergency"
@@ -213,7 +213,7 @@ export function CasesDashboard({
                     {item.location || item.hospitalName} ·{" "}
                     {item.anaesthesiaType}
                   </p>
-                  {role === "anesthetist" && item.hospitalReliability && <p className="mt-2 text-sm text-black">⭐ {item.hospitalReliability.ratingCount?item.hospitalReliability.rating:'New'} · Hospital reliability <b>{item.hospitalReliability.score}/100</b> · Payment {item.hospitalReliability.paymentReliability}% · {item.hospitalReliability.completedCases} completed</p>}
+                  {role === "anesthetist" && item.hospitalReliability && <p className="mt-2 text-sm text-black">⭐ {item.hospitalReliability.ratingCount?item.hospitalReliability.rating:'New'} · Hospital reliability <b>{item.hospitalReliability.score==null?"Not enough data":`${item.hospitalReliability.score}/100`}</b> · Payment {item.hospitalReliability.paymentReliability==null?"No history":`${item.hospitalReliability.paymentReliability}%`} · {item.hospitalReliability.completedCases} completed</p>}
                 </div>
                 <div className="sm:text-right">
                   <p className="text-lg font-bold">
@@ -329,7 +329,7 @@ export function CasesDashboard({
                       <span className="mt-2 block text-sm text-slate-800">Hospital posted fee: ₹{(item.offeredFeePaise / 100).toLocaleString("en-IN")} · Additional bid: ₹{(response.additionalFeePaise / 100).toLocaleString("en-IN")}</span>
                       <span className="mt-1 block text-base font-bold text-emerald-900">Total demanded fee for anaesthesia: ₹{(response.totalFeePaise / 100).toLocaleString("en-IN")}</span>
                       {response.match && <span className="mt-1 block text-sm text-blue-700"><b>Recommended Match — {response.match.score}/100</b> · {response.match.reasons.join(" • ")}</span>}
-                      {response.reliability && <span className="mt-1 block text-sm text-black">⭐ {response.reliability.ratingCount?response.reliability.rating:'New'} · Reliability <b>{response.reliability.score}/100</b> · {response.reliability.completedCases} completed · Arrival {response.reliability.arrivalPerformance}</span>}
+                      {response.reliability && <span className="mt-1 block text-sm text-black">⭐ {response.reliability.ratingCount?response.reliability.rating:'New'} · Reliability <b>{response.reliability.score==null?"Not enough data":`${response.reliability.score}/100`}</b> · {response.reliability.completedCases} completed · Arrival {response.reliability.arrivalPerformance}</span>}
                     </span>
                     <div className="grid gap-2 sm:flex"><button disabled={!response.latitude||!response.longitude} onClick={()=>setSelectedMapResponder(value=>({...value,[item.id]:response.id}))} className="min-h-11 w-full rounded-lg border border-blue-300 px-3 py-2 font-semibold text-blue-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">View on Map</button><button
                       disabled={selectingCaseId !== null}

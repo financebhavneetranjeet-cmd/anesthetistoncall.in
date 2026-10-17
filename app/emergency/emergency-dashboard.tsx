@@ -36,7 +36,7 @@ type Reply = {
   etaMinutes: number | null;
   clinicianName: string;
   qualification: string;
-  match?: {score:number;reasons:string[];dataState:string;metrics:{onTimeRate:number;rating:number;completedCases:number}};
+  match?: {score:number;reasons:string[];dataState:string;metrics:{onTimeRate:number|null;rating:number;completedCases:number}};
 };
 const money = (p: number) => `₹${(p / 100).toLocaleString("en-IN")}`;
 export function EmergencyDashboard({ role }: { role: string }) {
@@ -48,7 +48,7 @@ export function EmergencyDashboard({ role }: { role: string }) {
     [message, setMessage] = useState("");
   const load = useCallback(async () => {
     const r = await fetch("/api/emergency");
-    const d = await r.json();
+    const d = await r.json() as {hospitals?:Hospital[];cases?:SOS[];responses:Reply[];error?:{message?:string}};
     if (r.ok) {
       setHospitals(d.hospitals ?? []);
       setCases(d.cases ?? []);
@@ -67,7 +67,7 @@ export function EmergencyDashboard({ role }: { role: string }) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body),
         }),
-        d = await r.json();
+        d = await r.json() as {hospitals?:Hospital[];cases?:SOS[];responses:Reply[];error?:{message?:string}};
       setMessage(r.ok ? success : (d.error?.message ?? "Action failed."));
       if (r.ok) await load();
     } catch {
@@ -105,7 +105,7 @@ export function EmergencyDashboard({ role }: { role: string }) {
   }
   async function compare(id: string) {
     const r = await fetch(`/api/emergency/${id}`),
-      d = await r.json();
+      d = await r.json() as {hospitals?:Hospital[];cases?:SOS[];responses:Reply[];error?:{message?:string}};
     if (r.ok) setDetails((v) => ({ ...v, [id]: d.responses }));
   }
   return (

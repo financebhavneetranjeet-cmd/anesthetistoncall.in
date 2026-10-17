@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { responseMetrics } from "./response-metrics";
 
 export const REVIEW_EDIT_HOURS = 48;
 export const ratingCategories = {
@@ -27,6 +28,7 @@ export async function reliabilityFor(userId: string) {
   if (!user) throw new Error("User not found");
   const isHospital = user.role === "hospital";
   const ownerFilter = isHospital ? "c.hospital_id IN (SELECT id FROM hospitals WHERE owner_user_id=?)" : "c.assigned_clinician_user_id=?";
+  const responseStats = await responseMetrics(userId);
   const row = await env.DB.prepare(`SELECT
     (SELECT COUNT(*) FROM cases c WHERE ${ownerFilter} AND c.status='completed') completed,
     (SELECT COUNT(*) FROM cases c WHERE ${ownerFilter} AND c.status IN('completed','cancelled')) accepted,
@@ -46,12 +48,15 @@ export async function reliabilityFor(userId: string) {
       userId,userId,userId,userId,userId,userId,userId,
     ).first<any>();
   const completed=Number(row?.completed??0),accepted=Number(row?.accepted??0),cancelled=Number(row?.cancelled??0),arrivals=Number(row?.arrivals??0),ratings=Number(row?.ratingCount??0),payments=Number(row?.payments??0);
-  const completionRate=pct(completed,accepted,100),punctuality=pct(Number(row?.onTime??0),arrivals,100),responseRate=isHospital?100:pct(Number(row?.responses??0),Number(row?.alerts??0),90),paymentReliability=isHospital?pct(Number(row?.settled??0),payments,100):100;
+  const completionRate=accepted?pct(completed,accepted):null,punctuality=arrivals?pct(Number(row?.onTime??0),arrivals):null,responseRate=isHospital?null:responseStats.responseRate,paymentReliability=isHospital&&payments?pct(Number(row?.settled??0),payments):null;
   const rawAverage=Number(row?.avgRating??0);
   const adjustedRating=(ratings*rawAverage+5*4.5)/(ratings+5); // Bayesian prior prevents one review dominating.
   const ratingScore=adjustedRating/5*100;
-  let score=0.30*completionRate+0.20*punctuality+0.10*responseRate+0.20*paymentReliability+0.20*ratingScore;
+  const measured: [number|null,number][] = [[completionRate,.30],[punctuality,.20],[responseRate,.10],[paymentReliability,.20],[ratings?ratingScore:null,.20]];
+  const available=measured.filter((item): item is [number,number] => item[0]!=null);
+  const weight=available.reduce((sum,item)=>sum+item[1],0);
+  let score=weight?available.reduce((sum,item)=>sum+item[0]*item[1],0)/weight:0;
   score-=Math.min(15,Number(row?.lateCancelled??0)*3)+Math.min(25,Number(row?.noShows??0)*10)+Math.min(15,Number(row?.disputes??0)*4);
   score=clamp(score);
-  return {score,rating:ratings?Number(rawAverage.toFixed(1)):0,ratingCount:ratings,completedCases:completed,completionRate,punctuality,paymentReliability,responseRate,cancellations:cancelled,lateCancellations:Number(row?.lateCancelled??0),noShows:Number(row?.noShows??0),paymentDisputes:Number(row?.disputes??0),dataState:completed<5?"Building history":"Established history",arrivalPerformance:arrivals<3?"Not enough data":punctuality>=95?"Excellent":punctuality>=85?"Good":"Needs improvement"};
+  return {score:completed>=5&&weight?score:null,rating:ratings?Number(rawAverage.toFixed(1)):0,ratingCount:ratings,completedCases:completed,completionRate,punctuality,paymentReliability,responseRate,cancellations:cancelled,lateCancellations:Number(row?.lateCancelled??0),noShows:Number(row?.noShows??0),paymentDisputes:Number(row?.disputes??0),dataState:completed<5?"Building history":"Established history",arrivalPerformance:arrivals<3?"Not enough data":(punctuality??0)>=95?"Excellent":(punctuality??0)>=85?"Good":"Needs improvement"};
 }

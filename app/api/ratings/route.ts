@@ -22,7 +22,7 @@ export async function GET(request:Request){
 export async function POST(request:Request){
   const viewer=await getSessionUser();if(!isVerifiedPlatformUser(viewer)||viewer.role==='surgeon'||viewer.role==='admin')return jsonError("Only the case hospital or assigned anaesthetist may rate.",403);if(!env.DB)return jsonError("Database unavailable.",503);
   const body=await request.json().catch(()=>null);
-  if(body?.action==='report'){
+  if(body && typeof body === "object" && "action" in body && body.action==='report'){
     const parsed=z.object({action:z.literal('report'),ratingId:z.string().uuid(),reason:z.string().trim().min(5).max(500)}).safeParse(body);if(!parsed.success)return jsonError("Please provide a valid report reason.");
     const review=await env.DB.prepare("SELECT case_id AS caseId,rater_user_id AS raterId,rated_user_id AS ratedId FROM case_ratings WHERE id=?").bind(parsed.data.ratingId).first<any>();if(!review||![review.raterId,review.ratedId].includes(viewer.id))return jsonError("Only a party to this verified case may report the review.",403);
     await env.DB.batch([env.DB.prepare("INSERT OR IGNORE INTO review_reports(id,rating_id,reported_by_user_id,reason) VALUES(?,?,?,?)").bind(crypto.randomUUID(),parsed.data.ratingId,viewer.id,parsed.data.reason),env.DB.prepare("UPDATE case_ratings SET disputed_at=CURRENT_TIMESTAMP,dispute_reason=? WHERE id=?").bind(parsed.data.reason,parsed.data.ratingId),env.DB.prepare("INSERT INTO review_audit_events(id,rating_id,case_id,actor_user_id,actor_role,action,details) VALUES(?,?,?,?,?,'reported',?)").bind(crypto.randomUUID(),parsed.data.ratingId,review.caseId,viewer.id,viewer.role,JSON.stringify({reason:parsed.data.reason}))]);return jsonOk({reported:true});
