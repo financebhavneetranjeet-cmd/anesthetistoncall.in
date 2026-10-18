@@ -221,7 +221,6 @@ export function CasesDashboard({
                       ? `₹${(item.offeredFeePaise / 100).toLocaleString("en-IN")}`
                       : "Fee not specified"}
                   </p>
-                  {item.currentResponseStatus === "available" && <CaseSms caseId={item.id} action="availability" refreshKey={item.status}/>}
                   {Boolean(item.biddingEnabled) && item.status === "open" && (
                     <p className="text-sm text-slate-500">
                       Optional bidding enabled
@@ -259,7 +258,7 @@ export function CasesDashboard({
                       {respondingId === item.id ? "Sending response…" : "I’m Available"}
                     </button>
                   )}
-                  {item.currentResponseStatus === "available" && <CaseSms caseId={item.id} action="availability" refreshKey={item.status}/>}
+                  {["available", "withdrawn"].includes(item.currentResponseStatus ?? "") && <CaseSms caseId={item.id} action="availability" refreshKey={item.status} onResponseWithdrawn={()=>setItems(previous=>previous.map(c=>c.id===item.id?{...c,currentResponseStatus:'withdrawn'}:c))}/>}
                   {Boolean(item.biddingEnabled) && (
                     <form
                       className="mt-3 grid gap-2 sm:flex sm:flex-wrap"

@@ -15,6 +15,7 @@ export const RELEASES = [
   { version: "1.14", name: "Clearer Forms and Simpler Case Posting" },
   { version: "1.15", name: "Simpler Anaesthetist Dashboard" },
   { version: "1.16", name: "Accurate History and Reliable Location Controls" },
+  { version: "1.17", name: "SMS Follow-up and Urgent Search" },
 ] as const;
 
 export const CURRENT_RELEASE = RELEASES.at(-1)!;

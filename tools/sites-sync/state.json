@@ -1,5 +1,5 @@
 {
-  "deployment_id": "appgdep_6ad37f8211d48191b73b4be68d0b9aaa",
+  "deployment_id": "appgdep_6ad433db919c8191a79e303cbc0a86a6",
   "files": {
     ".npmrc": {
       "blob": "9f274d6425b9792ae0a70cb0b96a29fd98ec6ed6",
@@ -274,7 +274,7 @@
       "mode": "100644"
     },
     "app/api/cases/[id]/sms/route.ts": {
-      "blob": "13835e37dd7b1b14044cae5b7b259bebf0c68894",
+      "blob": "8ea87eb55ba91bcd5076d49f258b8e3aea90aae7",
       "mode": "100644"
     },
     "app/api/cases/route.ts": {
@@ -434,7 +434,7 @@
       "mode": "100644"
     },
     "app/cases/cases-dashboard.tsx": {
-      "blob": "cc92c49ff69d1131bd34afe0b94035c692a0b0ae",
+      "blob": "08b556f1bd87807731adfeda9e1c4a1fc1518a53",
       "mode": "100644"
     },
     "app/cases/new/new-case-form.tsx": {
@@ -626,7 +626,7 @@
       "mode": "100644"
     },
     "components/case-sms.tsx": {
-      "blob": "b587ba8cb7cb980aac875ab5dd4be0a7f1e7bd2a",
+      "blob": "7f24ab7f624ee41534dc314add0d5fa8854de696",
       "mode": "100644"
     },
     "components/home/emergency-availability-map.tsx": {
@@ -1206,7 +1206,7 @@
       "mode": "100644"
     },
     "lib/release.ts": {
-      "blob": "fbd7a4279c872cabaace9814d8cd648f6057c58d",
+      "blob": "c41b81e1d9f7383c547249f66e2110e247fdce31",
       "mode": "100644"
     },
     "lib/server/admin.ts": {
@@ -1225,6 +1225,10 @@
       "blob": "0ce6b1f5af7e5592614310dc42f728879ef081d1",
       "mode": "100644"
     },
+    "lib/server/case-sms-followup.ts": {
+      "blob": "c417d6e733452027df6b3f1659225e6153af62ad",
+      "mode": "100644"
+    },
     "lib/server/dashboard-access.ts": {
       "blob": "1a554defa4b4cb3b6af5b7190c283cf7472f1b26",
       "mode": "100644"
@@ -1238,7 +1242,7 @@
       "mode": "100644"
     },
     "lib/server/emergency.ts": {
-      "blob": "47ad86ebf9385fc5c963b9731134d6f93d684a68",
+      "blob": "3e4054b6413ba010cf4c106953f5a01fd570f2a4",
       "mode": "100644"
     },
     "lib/server/google-auth.ts": {
@@ -1370,7 +1374,7 @@
       "mode": "100644"
     },
     "public/sw.js": {
-      "blob": "5897f43c0cbb845f42d8214ac48b5f5d536f1798",
+      "blob": "6fe2d9c6bba9dff04747a2b35af82d01af9df959",
       "mode": "100644"
     },
     "public/window.svg": {
@@ -1513,6 +1517,14 @@
       "blob": "b7c9ae361361301e8fa6d268a1ede09f91c8cb09",
       "mode": "100644"
     },
+    "scripts/verify-sms-followup-ui.mjs": {
+      "blob": "82e955f03c74530f70fc4ac2f92eaa52b159235a",
+      "mode": "100644"
+    },
+    "scripts/verify-sms-followup.mjs": {
+      "blob": "0e0e677d3bf921b49a2a4b0be831eb7af537f398",
+      "mode": "100644"
+    },
     "scripts/verify-task16.mjs": {
       "blob": "c43cef7beb42b8945a15f3b54f5c76fb984cdb32",
       "mode": "100644"
@@ -1563,8 +1575,8 @@
     }
   },
   "project_id": "appgprj_6aa15e229eb8819183ce0683ef0a4d8c",
-  "published_at": "2026-10-17T14:01:05.667667+00:00",
-  "pwa_version": "1.16",
-  "sites_commit": "f70f0f2c4f05c07346ad80b0f655dc36f403ff11",
-  "sites_version": 123
+  "published_at": "2026-10-18T02:50:33.490433+00:00",
+  "pwa_version": "1.17",
+  "sites_commit": "2e0603a59a4f89a78241b26b988e35951dffd93e",
+  "sites_version": 124
 }
