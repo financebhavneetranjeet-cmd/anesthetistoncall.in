@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { CASE_DASHBOARD_WINDOW_SQL } from '@/lib/server/case-dashboard-window';
 import { alertEligibleAnaesthetists } from './emergency';
 
 export const smsEventId = (caseId: string, userId: string, action: string) => `case-sms:${caseId}:${userId}:${action}`;
@@ -13,13 +14,13 @@ export async function smsFollowup(caseId: string, userId: string) {
 // the random claim token keeps concurrent/retried requests from applying changes twice.
 export async function recordSmsAction(caseId: string, userId: string, action: 'availability'|'unavailable'|'urgent') {
   const db=env.DB!, eventId=smsEventId(caseId,userId,action), claim=crypto.randomUUID();
-  const active=await db.prepare("SELECT id FROM cases WHERE id=? AND status='open' AND assigned_clinician_user_id IS NULL").bind(caseId).first();
+  const active=await db.prepare(`SELECT c.id FROM cases c WHERE c.id=? AND c.status='open' AND c.assigned_clinician_user_id IS NULL AND ${CASE_DASHBOARD_WINDOW_SQL}`).bind(caseId).first();
   if(!active)return false;
   const openedId=smsEventId(caseId,userId,'availability');
   const eventType={availability:'availability_sms_opened',unavailable:'unavailable_sms_opened',urgent:'urgent_search_requested'}[action];
   const statements=[db.prepare(`INSERT OR IGNORE INTO case_audit_events(id,case_id,actor_user_id,event_type,details)
     SELECT ?,c.id,?,?,json_object('claim',?,'offerVersion',COALESCE(c.sos_offer_version,1)+1)
-    FROM cases c WHERE c.id=? AND c.status='open' AND c.assigned_clinician_user_id IS NULL
+    FROM cases c WHERE c.id=? AND c.status='open' AND c.assigned_clinician_user_id IS NULL AND ${CASE_DASHBOARD_WINDOW_SQL}
     AND EXISTS (SELECT 1 FROM case_responses r WHERE r.case_id=c.id AND r.clinician_user_id=? AND (r.status='available' OR (?<>'availability' AND r.status='withdrawn')))
     AND (?='availability' OR EXISTS(SELECT 1 FROM case_audit_events WHERE id=?))`)
     .bind(eventId,userId,eventType,claim,caseId,userId,action,action,openedId)];

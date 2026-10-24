@@ -1,3 +1,4 @@
+import { requireCompletionFeedback } from "@/lib/server/completion-feedback";
 import { env } from "cloudflare:workers";
 import { getSessionUser, isVerifiedAnaesthetist } from "@/lib/server/session";
 import { jsonError, jsonOk } from "@/lib/server/http";
@@ -8,6 +9,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
   if (!env.DB) return jsonError("Database unavailable.", 503);
   const user = await getSessionUser();
   if (!isVerifiedAnaesthetist(user)) return jsonError("Verified anaesthetist access required.", 403);
+  const feedbackRequired=await requireCompletionFeedback(user.id);if(feedbackRequired)return feedbackRequired;
   const { id } = await params;
   const owner = await env.DB.prepare("SELECT h.owner_user_id AS id,u.mobile FROM cases c JOIN hospitals h ON h.id=c.hospital_id JOIN users u ON u.id=h.owner_user_id WHERE c.id=? AND c.status='offered' AND c.assigned_clinician_user_id=?").bind(id, user.id).first<{ id: string; mobile: string }>();
   if (!owner) return jsonError("Assignment offer not found.", 404);

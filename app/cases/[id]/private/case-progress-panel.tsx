@@ -163,7 +163,7 @@ export function CaseProgressPanel({ caseId }: { caseId: string }) {
               >
                 <span>{label(e.eventType)}</span>
                 <time className="shrink-0 text-xs text-slate-500">
-                  {new Date(e.createdAt).toLocaleString("en-IN")}
+                  {new Date(e.createdAt).toLocaleString("en-IN", { hour12: true })}
                 </time>
               </div>
             ))

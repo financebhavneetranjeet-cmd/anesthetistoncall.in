@@ -1,9 +1,10 @@
+import { CASE_DASHBOARD_WINDOW_SQL } from "@/lib/server/case-dashboard-window";
+import { requireCompletionFeedback } from "@/lib/server/completion-feedback";
 import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 import { getSessionUser, isApprovedHospital, isVerifiedAnaesthetist, isVerifiedClinician } from "@/lib/server/session";
 import { jsonError, jsonOk } from "@/lib/server/http";
 import { auditCase } from "@/lib/server/case-audit";
-import { reliabilityFor } from "@/lib/server/ratings";
 import { sendCasePostedSmsForCase } from "@/lib/server/case-posted-sms";
 import { sendWebPushForCase } from "@/lib/server/web-push";
 
@@ -11,20 +12,18 @@ const caseSchema = z.object({
   requestId: z.string().uuid().optional(),
   procedureName: z.string().trim().min(3).max(160), specialty: z.string().trim().max(100).optional(), location: z.string().trim().min(2).max(200), anaesthesiaType: z.string().trim().max(60).optional(), scheduledAt: z.string().datetime(),
   offeredFeeRupees: z.number().int().positive().max(1_000_000), urgency: z.enum(["routine", "urgent", "emergency"]), durationMinutes: z.number().int().min(15).max(1440), biddingEnabled: z.boolean().default(false),
-  publicNotes: z.string().trim().max(1000).optional(), patientInitials: z.string().trim().max(12).optional(), patientAge: z.number().int().min(0).max(120).optional(), patientSex: z.enum(["female", "male", "other"]).optional(),
+  publicNotes: z.string().trim().max(1000).optional(), patientInitials: z.string().trim().max(12).optional(),
   contactPhone: z.string().trim().max(20).optional(), locationInstructions: z.string().trim().max(300).optional(), clinicalNotes: z.string().trim().max(1000).optional(),
 });
 
 export async function GET() {
   if (!env.DB) return jsonError("Database unavailable.", 503, "DB_UNAVAILABLE");
   const user = await getSessionUser();
-  const clinician = isVerifiedAnaesthetist(user);
   if (!isVerifiedClinician(user) && !isApprovedHospital(user)) return jsonError("Verified member access required.", 403, "VERIFIED_MEMBER_REQUIRED");
-  const where = user.role === "hospital" ? "c.hospital_id = ?" : user.role === "surgeon" ? "c.posted_by_user_id = ?" : "(c.status = 'open' OR (c.status IN ('offered','assigned','completed') AND c.assigned_clinician_user_id = ?))";
-  const query = `SELECT c.id,c.procedure_name AS procedureName,c.specialty,c.location,c.anaesthesia_type AS anaesthesiaType,c.scheduled_at AS scheduledAt,c.offered_fee_paise AS offeredFeePaise,c.final_agreed_fee_paise AS finalAgreedFeePaise,c.fee_locked_at AS feeLockedAt,c.ot_status AS otStatus,c.arrived_at AS arrivedAt,c.ot_ready_at AS otReadyAt,c.case_started_at AS caseStartedAt,c.case_completed_at AS caseCompletedAt,c.actual_duration_minutes AS actualDurationMinutes,c.status,c.urgency,c.duration_minutes AS durationMinutes,c.public_notes AS publicNotes,c.bidding_enabled AS biddingEnabled,c.assigned_clinician_user_id AS assignedClinicianUserId,au.full_name AS assignedClinicianName,h.name AS hospitalName,h.owner_user_id AS hospitalUserId,(SELECT COUNT(*) FROM case_responses r WHERE r.case_id=c.id AND r.status='available') AS responseCount,(SELECT r.status FROM case_responses r WHERE r.case_id=c.id AND r.clinician_user_id=? LIMIT 1) AS currentResponseStatus,(SELECT CASE WHEN r.response_type IS NULL THEN r.proposed_fee_paise ELSE r.proposed_fee_paise-c.offered_fee_paise END FROM case_responses r WHERE r.case_id=c.id AND r.clinician_user_id=? LIMIT 1) AS currentProposedFeePaise FROM cases c JOIN hospitals h ON h.id=c.hospital_id LEFT JOIN users au ON au.id=c.assigned_clinician_user_id WHERE ${where} ORDER BY c.scheduled_at ASC`;
+  const where = user.role === "hospital" ? "c.hospital_id = ? AND c.status NOT IN ('completed','cancelled')" : user.role === "surgeon" ? "c.posted_by_user_id = ? AND c.status NOT IN ('completed','cancelled')" : "(c.status = 'open' OR (c.status IN ('offered','assigned') AND c.assigned_clinician_user_id = ?))";
+  const query = `SELECT c.id,c.procedure_name AS procedureName,c.specialty,c.location,c.anaesthesia_type AS anaesthesiaType,c.scheduled_at AS scheduledAt,strftime('%Y-%m-%dT%H:%M:%SZ',datetime(COALESCE(c.approved_at,c.created_at),'+12 hours')) AS expiresAt,c.offered_fee_paise AS offeredFeePaise,c.final_agreed_fee_paise AS finalAgreedFeePaise,c.fee_locked_at AS feeLockedAt,c.ot_status AS otStatus,c.arrived_at AS arrivedAt,c.ot_ready_at AS otReadyAt,c.case_started_at AS caseStartedAt,c.case_completed_at AS caseCompletedAt,c.actual_duration_minutes AS actualDurationMinutes,c.status,c.urgency,c.duration_minutes AS durationMinutes,c.public_notes AS publicNotes,c.bidding_enabled AS biddingEnabled,c.assigned_clinician_user_id AS assignedClinicianUserId,au.full_name AS assignedClinicianName,h.name AS hospitalName,poster.full_name AS postedByName,poster.role AS postedByRole,h.owner_user_id AS hospitalUserId,(SELECT COUNT(*) FROM case_responses r WHERE r.case_id=c.id AND r.status='available') AS responseCount,(SELECT r.status FROM case_responses r WHERE r.case_id=c.id AND r.clinician_user_id=? LIMIT 1) AS currentResponseStatus,(SELECT CASE WHEN r.response_type IS NULL THEN r.proposed_fee_paise ELSE r.proposed_fee_paise-c.offered_fee_paise END FROM case_responses r WHERE r.case_id=c.id AND r.clinician_user_id=? LIMIT 1) AS currentProposedFeePaise FROM cases c JOIN hospitals h ON h.id=c.hospital_id LEFT JOIN users au ON au.id=c.assigned_clinician_user_id LEFT JOIN users poster ON poster.id=c.posted_by_user_id WHERE (${where}) AND ${CASE_DASHBOARD_WINDOW_SQL} ORDER BY c.scheduled_at ASC`;
   const result = await env.DB.prepare(query).bind(user.id, user.id, user.role === "hospital" ? user.hospitalId : user.id).all();
-  const rows=result.results as any[];const enriched=clinician?await Promise.all(rows.map(async row=>({...row,hospitalReliability:await reliabilityFor(row.hospitalUserId)}))):rows;
-  return jsonOk({ cases: enriched });
+  return jsonOk({ cases: result.results });
 }
 
 export async function POST(request: Request) {
@@ -32,13 +31,18 @@ export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return jsonError("Please login to post a case.", 401, "LOGIN_REQUIRED");
   if (!isApprovedHospital(user)) return jsonError("Only approved hospitals can post cases.", 403, "HOSPITAL_APPROVAL_REQUIRED");
+  const feedbackRequired=await requireCompletionFeedback(user.id);if(feedbackRequired)return feedbackRequired;
   const parsed = caseSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "Invalid case details.");
   if (new Date(parsed.data.scheduledAt).getTime() <= Date.now()) return jsonError("Scheduled time must be in the future.");
   const caseId = parsed.data.requestId ?? crypto.randomUUID(); const d = parsed.data;
+  const hospital = await env.DB.prepare("SELECT name FROM hospitals WHERE id=? AND approval_status='approved'").bind(user.hospitalId).first<{ name: string }>();
+  if (!hospital) return jsonError("Approved hospital unavailable.", 403, "HOSPITAL_APPROVAL_REQUIRED");
+  const scheduledTime = new Date(d.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+  const noticeBody = `${d.procedureName} at ${hospital.name} on ${scheduledTime} IST. Sent by ${user.fullName || "hospital personnel"}.`;
   await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO cases (id, hospital_id, posted_by_user_id, procedure_name, specialty, location, anaesthesia_type, scheduled_at, offered_fee_paise, urgency, duration_minutes, public_notes, bidding_enabled, status, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)").bind(caseId, user.hospitalId, user.id, d.procedureName, d.specialty || null, d.location, d.anaesthesiaType || "Not specified", d.scheduledAt, d.offeredFeeRupees * 100, d.urgency, d.durationMinutes, d.publicNotes ?? null, d.biddingEnabled ? 1 : 0),
-    env.DB.prepare("INSERT OR IGNORE INTO case_private_details (id, case_id, patient_initials, patient_age, patient_sex, contact_phone, location_instructions, clinical_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(caseId, caseId, d.patientInitials ?? null, d.patientAge ?? null, d.patientSex ?? null, d.contactPhone ?? null, d.locationInstructions ?? null, d.clinicalNotes ?? null),
+    env.DB.prepare("INSERT OR IGNORE INTO case_private_details (id, case_id, patient_initials, patient_age, patient_sex, contact_phone, location_instructions, clinical_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(caseId, caseId, d.patientInitials ?? null, null, null, d.contactPhone ?? null, d.locationInstructions ?? null, d.clinicalNotes ?? null),
     env.DB.prepare(`INSERT OR IGNORE INTO notifications (id,user_id,case_id,kind,title,body,dedupe_key)
       SELECT lower(hex(randomblob(16))),u.id,?,'case_open',CASE WHEN ? IN ('urgent','emergency') THEN 'Urgent anaesthesia case' ELSE 'New open case' END,?,'case_open:'||?||':'||u.id
       FROM users u JOIN clinician_profiles cp ON cp.user_id=u.id
@@ -46,7 +50,7 @@ export async function POST(request: Request) {
       AND cp.verification_status='verified' AND (EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id AND a.status='available' AND datetime(a.start_at)<=CURRENT_TIMESTAMP AND datetime(a.end_at)>CURRENT_TIMESTAMP)
       OR (cp.case_notifications_enabled=1 AND cp.availability_status='available' AND datetime(cp.available_until)>CURRENT_TIMESTAMP
         AND NOT EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id)))
-      AND lower(cp.city)=lower((SELECT city FROM hospitals WHERE id=?))`).bind(caseId, d.urgency, `${d.procedureName} at ${d.location} is open for responses.`, caseId, user.hospitalId),
+      AND lower(cp.city)=lower((SELECT city FROM hospitals WHERE id=?))`).bind(caseId, d.urgency, noticeBody, caseId, user.hospitalId),
     env.DB.prepare("INSERT OR IGNORE INTO notification_deliveries(id,notification_id,channel,status) SELECT 'in-app:'||id,id,'in_app','sent' FROM notifications WHERE case_id=? AND kind='case_open'").bind(caseId),
     env.DB.prepare("INSERT OR IGNORE INTO notification_deliveries(id,notification_id,channel,status,error_code) SELECT 'sms:'||id,id,'sms','skipped','SMS_PENDING' FROM notifications WHERE case_id=? AND kind='case_open'").bind(caseId),
   ]);

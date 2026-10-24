@@ -19,7 +19,7 @@ function load(file,seed){
 const Dashboard=load('app/cases/cases-dashboard.tsx').CasesDashboard;
 const html=renderToStaticMarkup(React.createElement(Dashboard,{role:'anesthetist',approved:true,viewerUserId:'test',dualDashboard:false}));
 for(const href of ['/performance','/reviews','/notifications'])assert.ok(!html.includes(`href="${href}"`));
-for(const href of ['/calendar','/payments','/emergency'])assert.ok(html.includes(`href="${href}"`));
+for(const href of ['/calendar','/replacement'])assert.ok(html.includes(`href="${href}"`));
 const metrics={ratingCount:0,completedCases:0,onTimeRate:null,responseRate:null,cancellations:0,repeatBookings:0,disputes:0,dataState:'New Member / Insufficient Data'};
 const Performance=load('app/performance/performance-dashboard.tsx',[metrics]).PerformanceDashboard;
 const performance=renderToStaticMarkup(React.createElement(Performance));

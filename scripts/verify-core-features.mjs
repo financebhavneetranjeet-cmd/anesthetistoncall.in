@@ -29,11 +29,12 @@ const requiredFiles = [
 
 const contentChecks = [
   ["app/cases/new/new-case-form.tsx", ["Procedure or surgery", "Hospital or location", "Post open case", "Allow optional fee bids"]],
-  ["app/cases/cases-dashboard.tsx", ["I’m Available", "Submit additional bid", "/assign", "Accept assignment", "Decline assignment", "Open coordination & OT progress", "Pending Acceptance"]],
+  ["app/cases/cases-dashboard.tsx", ["I’m Available", "Submit additional bid", "/assign", "Accept assignment", "Cannot attend - reopen case", "Open coordination & OT progress", "Pending Acceptance"]],
   ["app/api/cases/[id]/bids/route.ts", ["proposedFeeRupees", "bidding_enabled", "status = 'available'"]],
   ["app/api/cases/[id]/assign/route.ts", ["status='offered'", "assigned_clinician_user_id", "final_agreed_fee_paise", "fee_locked_at"]],
   ["app/api/cases/[id]/accept/route.ts", ["status='assigned'", "isVerifiedAnaesthetist"]],
-  ["app/api/cases/[id]/decline/route.ts", ["status='open'", "assigned_clinician_user_id=NULL", "isVerifiedAnaesthetist"]],
+  ["app/api/cases/[id]/decline/route.ts", ["reopenAssignment", "isVerifiedAnaesthetist"]],
+  ["lib/server/reopen-assignment.ts", ["status='open'", "assigned_clinician_user_id=NULL"]],
   ["app/api/cases/[id]/close/route.ts", ["status='completed'", "isApprovedHospital", "case_journeys"]],
   ["app/api/cases/[id]/private/route.ts", ["acceptedStatus", "clinicianMobile", "hospitalContactMobile"]],
   ["app/api/cases/[id]/journey/route.ts", ["journey_started", "eta_changed", "anaesthetist_arrived", "TOO_FAR"]],

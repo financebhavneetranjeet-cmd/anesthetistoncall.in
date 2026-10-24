@@ -39,6 +39,7 @@ export const hospitals = sqliteTable("hospitals", {
 }, (table) => [index("hospitals_owner_idx").on(table.ownerUserId)]);
 
 export const cases = sqliteTable("cases", {
+  feedbackRequired: integer("feedback_required").notNull().default(0),
   id: text("id").primaryKey(), hospitalId: text("hospital_id").notNull().references(() => hospitals.id), procedureName: text("procedure_name").notNull(),
   specialty: text("specialty"), location: text("location"),
   anaesthesiaType: text("anaesthesia_type").notNull(), scheduledAt: text("scheduled_at").notNull(), offeredFeePaise: integer("offered_fee_paise").notNull(),
@@ -238,3 +239,12 @@ export const verificationDocuments = sqliteTable("verification_documents", {
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+
+export const caseCompletionFeedback = sqliteTable("case_completion_feedback", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id").notNull().references(() => cases.id),
+  respondentUserId: text("respondent_user_id").notNull().references(() => users.id),
+  respondentSide: text("respondent_side", {enum:["anesthetist","hospital","surgeon"]}).notNull(),
+  answersJson: text("answers_json").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("completion_feedback_case_user_unique").on(table.caseId,table.respondentUserId), index("completion_feedback_user_idx").on(table.respondentUserId,table.caseId)]);
