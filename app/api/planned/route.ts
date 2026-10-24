@@ -1,3 +1,4 @@
+import { requireCompletionFeedback } from "@/lib/server/completion-feedback";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import { getSessionUser, isApprovedHospital, isVerifiedClinician } from "@/lib/server/session";
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
   if (!env.DB) return jsonError("Database unavailable.", 503);
   const user = await getSessionUser();
   if (!user || (!isApprovedHospital(user) && !(isVerifiedClinician(user) && user.role === "surgeon"))) return jsonError("Authorized poster required.", 403);
+  const feedbackRequired=await requireCompletionFeedback(user.id);if(feedbackRequired)return feedbackRequired;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "Invalid booking.");
   const data = parsed.data;
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
         AND NOT EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id)))
       AND EXISTS(SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id AND a.status IN('available','tentative') AND datetime(a.start_at)<=datetime(?) AND datetime(a.end_at)>=datetime(?,'+'||?||' minutes'))
       AND NOT EXISTS(SELECT 1 FROM cases x WHERE x.assigned_clinician_user_id=u.id AND x.booking_status='confirmed' AND datetime(x.scheduled_at)<datetime(?,'+'||(?+30)||' minutes') AND datetime(x.scheduled_at,'+'||(x.duration_minutes+x.booking_buffer_minutes)||' minutes')>datetime(?))`)
-      .bind(id, `${hospital.name}: ${data.procedureName} on ${new Date(data.scheduledAt).toLocaleString("en-IN")}. Offer ₹${data.offeredFeeRupees}.`, id, data.scheduledAt, data.scheduledAt, data.durationMinutes, data.scheduledAt, data.durationMinutes, data.scheduledAt),
+      .bind(id, `${hospital.name}: ${data.procedureName} on ${new Date(data.scheduledAt).toLocaleString("en-IN", { hour12: true })}. Offer ₹${data.offeredFeeRupees}.`, id, data.scheduledAt, data.scheduledAt, data.durationMinutes, data.scheduledAt, data.durationMinutes, data.scheduledAt),
   ]);
   await auditCase(id, user.id, "advance_case_posted", { offeredFeePaise: data.offeredFeeRupees * 100, estimatedDurationMinutes: data.durationMinutes });
   await sendWebPushForCase(id, "planned_case");

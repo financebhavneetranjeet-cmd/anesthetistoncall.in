@@ -1,7 +1,7 @@
 const CACHE_PREFIX = "aoc-public-shell-";
 // This generated identifier must match CURRENT_RELEASE in lib/release.ts.
 // scripts/verify-pwa.mjs blocks publishing if they differ.
-const CACHE_NAME = `${CACHE_PREFIX}1.17`;
+const CACHE_NAME = `${CACHE_PREFIX}1.18`;
 const PUBLIC_ASSETS = [
   "/offline.html",
   "/favicon.svg",

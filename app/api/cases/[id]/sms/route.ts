@@ -1,3 +1,4 @@
+import { requireCompletionFeedback } from "@/lib/server/completion-feedback";
 import { env } from 'cloudflare:workers';
 import { getSessionUser, isApprovedHospital, isVerifiedAnaesthetist } from '@/lib/server/session';
 import { jsonError, jsonOk } from '@/lib/server/http';
@@ -37,6 +38,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}) {
   const {id}=await params;
   const body=await req.json().catch(()=>null) as {action?:string}|null;
   const action=body?.action;
+  if(action==='availability'){const feedbackRequired=await requireCompletionFeedback(user.id);if(feedbackRequired)return feedbackRequired;}
   if(action!=='availability'&&action!=='unavailable'&&action!=='urgent') return jsonError('Invalid SMS action.');
   try {
     if(!await recordSmsAction(id,user.id,action)) return jsonError('This case is no longer open for this action. Refresh the case.',409);

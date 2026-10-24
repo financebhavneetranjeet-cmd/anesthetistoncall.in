@@ -23,6 +23,13 @@ let user={id:'a',fullName:'Doctor A',role:'anesthetist'};const push=[];
 const cache={};
 function load(file){if(cache[file])return cache[file];const mod={exports:{}};const code=ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 new Function('require','module','exports',code)(id=>id==='cloudflare:workers'?{env,waitUntil:()=>{}}:id.endsWith('/session')?{getSessionUser:async()=>user,isVerifiedAnaesthetist:u=>u?.role==='anesthetist',isApprovedHospital:u=>u?.role==='hospital'}:id.endsWith('/http')?{jsonOk:d=>Response.json(d),jsonError:(message,status=400)=>Response.json({error:{message}},{status})}:id.endsWith('/web-push')?{sendWebPushForCase:async(...args)=>push.push(args)}:load(id==='./emergency'?'lib/server/emergency.ts':id.replace('@/','')+'.ts'),mod,mod.exports);return cache[file]=mod.exports;}
+// Keep this focused SMS fixture compatible with the completion-feedback gate.
+db.exec(`CREATE TABLE case_completion_feedback(case_id TEXT,respondent_user_id TEXT);
+ALTER TABLE cases ADD COLUMN posted_by_user_id TEXT;
+ALTER TABLE cases ADD COLUMN feedback_required INTEGER DEFAULT 0;
+ALTER TABLE cases ADD COLUMN completion_confirmed_at TEXT;
+ALTER TABLE cases ADD COLUMN closed_at TEXT;
+ALTER TABLE cases ADD COLUMN case_completed_at TEXT;`);
 const route=load('app/api/cases/[id]/sms/route.ts');
 const context={params:Promise.resolve({id:'c'})};
 const get=()=>route.GET(new Request('https://local'),context).then(r=>r.json());

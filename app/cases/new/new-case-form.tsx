@@ -1,4 +1,5 @@
 "use client";
+import { TimeField } from "@/components/time-field";
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -56,5 +57,5 @@ export function NewCaseForm() {
 }
 
 function Field({ name, label, type = "text", required = false, placeholder, min }: { name: string; label: string; type?: string; required?: boolean; placeholder?: string; min?: string }) {
-  return <label className="grid min-w-0 gap-1 text-sm font-medium">{label}<input name={name} type={type} required={required} placeholder={placeholder} min={min} className="h-12 min-w-0 w-full rounded-xl border p-3" /></label>;
+  return <label className="grid min-w-0 gap-1 text-sm font-medium">{label}{type === "time" ? <TimeField name={name} required={required} /> : <input name={name} type={type} required={required} placeholder={placeholder} min={min} className="h-12 min-w-0 w-full rounded-xl border p-3" />}</label>;
 }

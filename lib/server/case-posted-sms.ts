@@ -26,7 +26,7 @@ function templateVariables(row: CaseSmsRow) {
     specialty: row.specialty ?? "Not specified",
     hospitalName: row.hospitalName,
     location: row.location ?? row.hospitalName,
-    scheduledAt: new Date(row.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+    scheduledAt: new Date(row.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" , hour12: true }),
     urgency: row.urgency,
     offeredFee: String(Math.round(row.offeredFeePaise / 100)),
     caseUrl: "https://anesthetistoncall.in/cases",

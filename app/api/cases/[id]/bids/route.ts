@@ -1,3 +1,4 @@
+import { requireCompletionFeedback } from "@/lib/server/completion-feedback";
 import { feeBreakdown } from "@/lib/fee-breakdown.mjs";
 import { getCurrentAnaesthetistAvailability } from "@/lib/server/emergency-availability-service";
 import { env } from "cloudflare:workers";
@@ -55,6 +56,7 @@ export async function POST(
   const user = await getSessionUser();
   if (!isVerifiedAnaesthetist(user))
     return jsonError("Verified anaesthetist access required.", 403);
+  const feedbackRequired=await requireCompletionFeedback(user.id);if(feedbackRequired)return feedbackRequired;
   const availability = await getCurrentAnaesthetistAvailability(user.id);
   if (!availability) return jsonError("Your saved availability is not active now. Open Show Your Availability and save a period covering the current time.", 409, "AVAILABILITY_REQUIRED");
   const parsed = bidSchema.safeParse(await request.json().catch(() => null));

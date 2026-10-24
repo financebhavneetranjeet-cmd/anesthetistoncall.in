@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { replacementRecipients } from "./replacement-recipients";
 import webPush from "web-push";
 import { isAdminMobile } from "./login";
 
@@ -49,9 +50,17 @@ export async function sendWebPushForCase(caseId: string, kind: string, dedupePre
   ).bind(caseId, kind, dedupePrefix ?? null, dedupePrefix ?? null, dedupePrefix ?? null).all<{ id: string; userId: string; title: string; body: string }>();
   if (!env.WEB_PUSH_PUBLIC_KEY || !env.WEB_PUSH_PRIVATE_KEY) return;
   await Promise.allSettled(notices.results.map(async (notice) => {
+    const current = await env.DB!.prepare("SELECT c.posted_by_user_id AS requesterId,h.city,EXISTS(SELECT 1 FROM case_audit_events e WHERE e.case_id=c.id AND e.event_type='replacement_requested') AS replacement FROM cases c JOIN hospitals h ON h.id=c.hospital_id WHERE c.id=? AND c.status='open'").bind(caseId).first<{requesterId:string;city:string;replacement:number}>();
+    if (!current) return;
+    if (current.replacement && !(await replacementRecipients(env.DB!,current.requesterId,current.city)).some(recipient => recipient.id === notice.userId)) return;
     // Claim before delivery so retried case submissions do not send duplicate alerts.
     const claim = await env.DB!.prepare("INSERT OR IGNORE INTO notification_deliveries(id,notification_id,channel,status) VALUES(?,?,'push','sending')").bind(`case-push:${notice.id}`, notice.id).run();
     if (!claim.meta.changes) return;
+    const stillOpen = await env.DB!.prepare("SELECT id FROM cases WHERE id=? AND status='open'").bind(caseId).first();
+    if (!stillOpen) {
+      await env.DB!.prepare("UPDATE notification_deliveries SET status='skipped',error_code='REQUEST_CANCELLED' WHERE id=?").bind(`case-push:${notice.id}`).run();
+      return;
+    }
     try {
       await sendWebPush(notice.userId, { title: notice.title, body: notice.body, url: kind === "sos_alert" ? "/emergency" : `/cases#case-${caseId}`, tag: notice.id }, notice.id, false);
       await env.DB!.prepare("UPDATE notification_deliveries SET status=CASE WHEN EXISTS(SELECT 1 FROM notification_deliveries d WHERE d.notification_id=? AND d.channel='push' AND d.status='sent') THEN 'sent' ELSE 'failed' END WHERE id=?").bind(notice.id, `case-push:${notice.id}`).run();
@@ -79,7 +88,7 @@ export async function notifyAdminsOfRegistration(registration: { id: string; rol
   const role = { hospital: "Hospital", diagnostic_center: "Diagnostic Center", anesthetist: "Anaesthetist", surgeon: "Surgeon" }[registration.role];
   const name = registration.name.slice(0, 140);
   const url = registration.role === "hospital" || registration.role === "diagnostic_center" ? "/admin" : "/admin/clinicians";
-  const payload = { title: registration.approvalRequestId ? "Approval documents received" : "New Registration Received", body: `${registration.approvalRequestId ? "Verification documents submitted for" : "New " + role + " registration:"} ${name}. Tap to review and approve. (${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST)`, url, tag: registration.approvalRequestId ? `approval:${registration.approvalRequestId}` : `registration:${registration.id}` };
+  const payload = { title: registration.approvalRequestId ? "Approval documents received" : "New Registration Received", body: `${registration.approvalRequestId ? "Verification documents submitted for" : "New " + role + " registration:"} ${name}. Tap to review and approve. (${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" , hour12: true })} IST)`, url, tag: registration.approvalRequestId ? `approval:${registration.approvalRequestId}` : `registration:${registration.id}` };
   await publishAdminNotice(payload, payload.tag);
   await Promise.all(authorized.map(async admin => {
     try {

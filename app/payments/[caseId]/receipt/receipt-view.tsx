@@ -88,7 +88,7 @@ export function ReceiptView({ caseId }: { caseId: string }) {
                 l="Final agreed fee"
                 v={`₹${(data.payment.totalAmountPaise/100).toLocaleString("en-IN")}`}
               />
-              <Item l="Balance" v={`₹${(data.payment.balanceAmountPaise/100).toLocaleString("en-IN")}`}/><Item l="Payment status" v={data.payment.status.replaceAll("_"," ")}/><Item l="Actual start" v={new Date(data.payment.caseStartedAt).toLocaleString("en-IN")}/><Item l="Case completed" v={new Date(data.payment.caseCompletedAt).toLocaleString("en-IN")}/>
+              <Item l="Balance" v={`₹${(data.payment.balanceAmountPaise/100).toLocaleString("en-IN")}`}/><Item l="Payment status" v={data.payment.status.replaceAll("_"," ")}/><Item l="Actual start" v={new Date(data.payment.caseStartedAt).toLocaleString("en-IN", { hour12: true })}/><Item l="Case completed" v={new Date(data.payment.caseCompletedAt).toLocaleString("en-IN", { hour12: true })}/>
             </dl>
             <h2 className="mt-8 border-t pt-6 text-lg font-bold">
               Payment entries
@@ -100,7 +100,7 @@ export function ReceiptView({ caseId }: { caseId: string }) {
                   <b>₹{(e.amountPaise / 100).toLocaleString("en-IN")}</b>
                   <p className="text-sm">
                     {e.method.replaceAll("_", " ")} ·{" "}
-                    {new Date(e.paidAt).toLocaleString("en-IN")}
+                    {new Date(e.paidAt).toLocaleString("en-IN", { hour12: true })}
                   </p>
                   {e.reference && (
                     <p className="text-sm">Reference: {e.reference}</p>

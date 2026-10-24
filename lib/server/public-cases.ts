@@ -1,3 +1,4 @@
+import { CASE_DASHBOARD_WINDOW_SQL } from "@/lib/server/case-dashboard-window";
 import { env } from "cloudflare:workers";
 
 export type PublicCaseSummary = {
@@ -21,7 +22,7 @@ export async function getPublicCases(): Promise<PublicCaseSummary[]> {
     FROM cases c JOIN hospitals h ON h.id = c.hospital_id
     JOIN users owner ON owner.id = h.owner_user_id
     LEFT JOIN users poster ON poster.id = c.posted_by_user_id
-    WHERE c.status = 'open' AND c.assigned_clinician_user_id IS NULL
+    WHERE ${CASE_DASHBOARD_WINDOW_SQL} AND c.status = 'open' AND c.assigned_clinician_user_id IS NULL
       AND datetime(c.scheduled_at) > CURRENT_TIMESTAMP
       AND h.approval_status = 'approved' AND owner.status = 'verified' AND owner.account_status = 'active'
       AND (c.posted_by_user_id IS NULL OR (poster.status = 'verified' AND poster.account_status = 'active'))

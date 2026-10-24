@@ -36,6 +36,9 @@ function load(path) {
   return exports;
 }
 modules['@/lib/server/session'] = { ...load('lib/server/session.ts'), getSessionUser: async () => user };
+modules['./http'] = modules['@/lib/server/http'];
+modules['@/lib/server/completion-feedback'] = load('lib/server/completion-feedback.ts');
+modules['@/lib/server/case-dashboard-window'] = load('lib/server/case-dashboard-window.ts');
 const cases = load('app/api/cases/route.ts');
 const planned = load('app/api/planned/route.ts');
 const payload = { hospitalId, procedureName: 'Test procedure', location: 'Test Hospital', scheduledAt: new Date(Date.now() + 86400000).toISOString(), offeredFeeRupees: 5000, urgency: 'routine', durationMinutes: 60 };
@@ -58,6 +61,17 @@ for (const role of ['hospital', 'surgeon']) {
   }
 }
 assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cases').get().n, 6);
+// Exercise the real dashboard query at the publication cutoff, independent of surgery time.
+user = { id: 'hospital', role: 'hospital', status: 'verified', accountStatus: 'active', hospitalId, hospitalApprovalStatus: 'approved' };
+const ids = db.prepare('SELECT id FROM cases WHERE hospital_id=? LIMIT 3').all(hospitalId).map(row => row.id);
+db.prepare("UPDATE cases SET approved_at=datetime('now','-12 hours'), created_at=datetime('now','-2 days') WHERE id=?").run(ids[0]);
+db.prepare("UPDATE cases SET approved_at=datetime('now','-13 hours') WHERE id=?").run(ids[1]);
+db.prepare("UPDATE cases SET approved_at=datetime('now','-11 hours'), created_at=datetime('now','-2 days') WHERE id=?").run(ids[2]);
+const visible = (await (await cases.GET()).json()).cases.map(row => row.id);
+assert.ok(!visible.includes(ids[0]), 'Case disappears at exactly 12 hours');
+assert.ok(!visible.includes(ids[1]), 'Older case disappears');
+assert.ok(visible.includes(ids[2]), 'Recent approval remains visible despite old creation time');
+assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cases').get().n, 6, 'All records remain stored');
 for (const path of ['app/cases/new/new-case-form.tsx', 'app/planned/planned-form.tsx']) {
   const form = readFileSync(path, 'utf8');
   assert.doesNotMatch(form, /specialty|anaesthesiaType|Anaesthesia type|Specialty/);

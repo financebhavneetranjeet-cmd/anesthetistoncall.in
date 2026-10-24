@@ -18,8 +18,11 @@ type CaseItem = {
   status: string;
   urgency: string;
   durationMinutes: number | null;
+  caseStartedAt: string | null;
   publicNotes: string | null;
   hospitalName: string;
+  postedByName: string | null;
+  postedByRole: string | null;
   biddingEnabled: number;
   responseCount: number;
   currentResponseStatus: string | null;
@@ -70,7 +73,7 @@ export function CasesDashboard({
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const load = useCallback(async () => {
-    const response = await fetch("/api/cases");
+    const response = await fetch("/api/cases", { cache: "no-store" });
     const result = (await response.json()) as {
       cases: CaseItem[];
       error?: { message?: string };
@@ -80,7 +83,14 @@ export function CasesDashboard({
   }, []);
   useEffect(() => {
     const timer = setTimeout(() => void load(), 0);
+    const refresh = () => { if(document.visibilityState === "visible") void load().catch(()=>setMessage("Unable to refresh cases. Please retry.")); };
+    const poll=setInterval(refresh,15000);
+    window.addEventListener("focus",refresh);
+    document.addEventListener("visibilitychange",refresh);
     return () => {
+      clearInterval(poll);
+      window.removeEventListener("focus",refresh);
+      document.removeEventListener("visibilitychange",refresh);
       clearTimeout(timer);
     };
   }, [load]);
@@ -147,12 +157,14 @@ export function CasesDashboard({
             >
               Show Your Availability
             </Link>
+            {role !== "anesthetist" && (
             <Link
               href="/payments"
               className="grid min-h-11 place-items-center rounded-xl border border-[#4CAF50] aoc-light-green bg-[#E8F5E9] px-4 py-2 font-semibold text-[#1B5E20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B5E20]"
             >
               Payments
             </Link>
+            )}
             {role !== "anesthetist" && (
             <Link
               href="/notifications"
@@ -161,14 +173,7 @@ export function CasesDashboard({
               Notifications
             </Link>
             )}
-            {role === "anesthetist" && (
-              <Link
-                href="/emergency"
-                className="col-span-2 grid min-h-11 place-items-center rounded-xl bg-red-700 px-4 py-2 font-bold text-white"
-              >
-                🚨 Emergency / SOS
-              </Link>
-            )}
+            {role === "anesthetist" && <Link href="/replacement" className="col-span-2 grid min-h-12 place-items-center rounded-xl bg-blue-700 px-4 py-3 text-center font-bold text-white">Find another anesthetist for replacement</Link>}
             </>}
           </div>
         </header>
@@ -192,53 +197,21 @@ export function CasesDashboard({
               key={item.id}
               className="min-w-0 rounded-2xl border bg-white p-4 shadow-sm sm:p-5"
             >
+              <p className="mb-3 font-bold text-blue-800">{item.status === "open" ? "Open case" : "Your active case"}</p>
               <div className="grid min-w-0 gap-3 sm:flex sm:flex-wrap sm:justify-between">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap gap-2">
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold uppercase text-blue-800">
-                      {item.urgency}
-                    </span>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase text-emerald-800">
-                      {statusLabel(item.status)}
-                    </span>
-                  </div>
-                  <h2 className="mt-3 break-words text-xl font-bold">
+                  <h2 className="break-words text-xl font-bold">
                     {item.procedureName}
                   </h2>
-                  <p className="break-words text-black">
-                    {item.specialty || "Specialty not specified"} ·{" "}
-                    {item.hospitalName}
+                  <p className="mt-1 break-words text-black">At {item.hospitalName}</p>
+                  <p className="mt-2 text-sm leading-6">
+                    Reporting time: {new Date(item.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).replace(/\b(am|pm)\b/g, value => value.toUpperCase())}
                   </p>
-                  <p className="break-words text-black">
-                    {item.location || item.hospitalName} ·{" "}
-                    {item.anaesthesiaType}
+                  <p className="mt-2 break-words text-sm text-black">
+                    Sent by: {item.postedByName || "Name unavailable"} · {item.postedByRole === "anesthetist" ? "Anaesthetist" : item.postedByRole === "hospital" ? "Hospital personnel" : item.postedByRole === "surgeon" ? "Surgeon" : "Role unavailable"}
                   </p>
-                  {role === "anesthetist" && item.hospitalReliability && <p className="mt-2 text-sm text-black">⭐ {item.hospitalReliability.ratingCount?item.hospitalReliability.rating:'New'} · Hospital reliability <b>{item.hospitalReliability.score==null?"Not enough data":`${item.hospitalReliability.score}/100`}</b> · Payment {item.hospitalReliability.paymentReliability==null?"No history":`${item.hospitalReliability.paymentReliability}%`} · {item.hospitalReliability.completedCases} completed</p>}
-                </div>
-                <div className="sm:text-right">
-                  <p className="text-lg font-bold">
-                    {item.offeredFeePaise > 0
-                      ? `₹${(item.offeredFeePaise / 100).toLocaleString("en-IN")}`
-                      : "Fee not specified"}
-                  </p>
-                  {Boolean(item.biddingEnabled) && item.status === "open" && (
-                    <p className="text-sm text-slate-500">
-                      Optional bidding enabled
-                    </p>
-                  )}
                 </div>
               </div>
-              <p className="mt-4 text-sm leading-6">
-                Report: {new Date(item.scheduledAt).toLocaleString("en-IN")}{" "}
-                {item.durationMinutes
-                  ? `· ${item.durationMinutes} min expected`
-                  : ""}
-              </p>
-              {item.publicNotes && (
-                <p className="mt-2 break-words text-black">
-                  {item.publicNotes}
-                </p>
-              )}
               {role === "anesthetist" && item.status === "open" && (
                 <div className="mt-5 border-t pt-4">
                   {item.currentResponseStatus === "available" ? (
@@ -328,7 +301,6 @@ export function CasesDashboard({
                       <span className="mt-2 block text-sm text-slate-800">Hospital posted fee: ₹{(item.offeredFeePaise / 100).toLocaleString("en-IN")} · Additional bid: ₹{(response.additionalFeePaise / 100).toLocaleString("en-IN")}</span>
                       <span className="mt-1 block text-base font-bold text-emerald-900">Total demanded fee for anaesthesia: ₹{(response.totalFeePaise / 100).toLocaleString("en-IN")}</span>
                       {response.match && <span className="mt-1 block text-sm text-blue-700"><b>Recommended Match — {response.match.score}/100</b> · {response.match.reasons.join(" • ")}</span>}
-                      {response.reliability && <span className="mt-1 block text-sm text-black">⭐ {response.reliability.ratingCount?response.reliability.rating:'New'} · Reliability <b>{response.reliability.score==null?"Not enough data":`${response.reliability.score}/100`}</b> · {response.reliability.completedCases} completed · Arrival {response.reliability.arrivalPerformance}</span>}
                     </span>
                     <div className="grid gap-2 sm:flex"><button disabled={!response.latitude||!response.longitude} onClick={()=>setSelectedMapResponder(value=>({...value,[item.id]:response.id}))} className="min-h-11 w-full rounded-lg border border-blue-300 px-3 py-2 font-semibold text-blue-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">View on Map</button><button
                       disabled={selectingCaseId !== null}
@@ -368,10 +340,11 @@ export function CasesDashboard({
                       }
                       className="min-h-12 w-full rounded-xl border border-red-300 bg-white px-4 py-2 font-semibold text-red-700 sm:w-auto"
                     >
-                      Decline assignment
+                      Cannot attend - reopen case
                     </button>
                   </div>
                 )}
+              {role === "anesthetist" && item.status === "assigned" && !item.caseStartedAt && item.assignedClinicianUserId === viewerUserId && <button className="mt-4 min-h-12 rounded-xl border border-red-300 px-4 py-2 font-semibold text-red-700" onClick={()=>confirm("Cannot attend? This case will reopen for fresh responses.")&&void act(`/api/cases/${item.id}/decline`,{method:"POST"},"Case reopened for fresh responses.")}>Cannot attend - reopen case</button>}
               {role === "anesthetist" &&
                 ["assigned", "completed"].includes(item.status) &&
                 item.assignedClinicianUserId === viewerUserId && (

@@ -321,7 +321,7 @@ function PaymentDetail({
               {money(e.amountPaise)} · {e.method.replaceAll("_", " ")}
             </p>
             <p className="text-sm text-slate-600">
-              {new Date(e.paidAt).toLocaleString("en-IN")}
+              {new Date(e.paidAt).toLocaleString("en-IN", { hour12: true })}
               {e.reference ? ` · Ref: ${e.reference}` : ""}
             </p>
             <Status value={e.status} />

@@ -197,6 +197,13 @@
       "when": 1791468343507,
       "tag": "0029_google_fast_access",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1792491694222,
+      "tag": "0030_case_completion_feedback",
+      "breakpoints": true
     }
   ]
 }
