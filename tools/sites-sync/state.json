@@ -1,5 +1,5 @@
 {
-  "deployment_id": "appgdep_6adcd897e4a48191a49ace6f5d5cd834",
+  "deployment_id": "appgdep_6adce5204e8881918e2fa9bce13c719a",
   "files": {
     ".npmrc": {
       "blob": "9f274d6425b9792ae0a70cb0b96a29fd98ec6ed6",
@@ -221,6 +221,10 @@
       "blob": "a1d918f542b24de2d51797921687c613fa9485e7",
       "mode": "100644"
     },
+    "app/api/available-clinicians/route.ts": {
+      "blob": "bd9447a9169b5027558f8457843da92ab7fe4a8e",
+      "mode": "100644"
+    },
     "app/api/calendar/route.ts": {
       "blob": "e0ad65be94309eeb688cb0f78ada45453740a67a",
       "mode": "100644"
@@ -234,11 +238,11 @@
       "mode": "100644"
     },
     "app/api/cases/[id]/assign/route.ts": {
-      "blob": "4428a6d59f381f1bd280349e28728adf2e52e2f7",
+      "blob": "4b54e537093701789aaed30677588c674ada9e5d",
       "mode": "100644"
     },
     "app/api/cases/[id]/bids/route.ts": {
-      "blob": "16ae8b66f0076a4a9c19d24bdeba868feec81c81",
+      "blob": "639d8a37be35a032afd94d3a20c9cedd181b6aef",
       "mode": "100644"
     },
     "app/api/cases/[id]/close/route.ts": {
@@ -286,7 +290,7 @@
       "mode": "100644"
     },
     "app/api/cases/route.ts": {
-      "blob": "8099d12a8166218025a9ce28af82e8e9593f4df7",
+      "blob": "fe6a565bf15de13c4a5e24f769f155036e041760",
       "mode": "100644"
     },
     "app/api/clinicians/documents/route.ts": {
@@ -302,11 +306,11 @@
       "mode": "100644"
     },
     "app/api/emergency/[id]/manage/route.ts": {
-      "blob": "2829f9ed7e85b562ce5e66ddb6b82db978347ece",
+      "blob": "ba7f796608f2ca3943a8a1bbed751e521c91f926",
       "mode": "100644"
     },
     "app/api/emergency/[id]/respond/route.ts": {
-      "blob": "5178b9778fc579569f75dedf86b23caf59186e35",
+      "blob": "3af45aeb7f4505db9c002a43a9037c12477ca96d",
       "mode": "100644"
     },
     "app/api/emergency/[id]/route.ts": {
@@ -417,8 +421,12 @@
       "blob": "85c031b610c6cfc1a2343bc1be1d35146c692ead",
       "mode": "100644"
     },
+    "app/availability/available-clinicians.tsx": {
+      "blob": "83ffe86a7006c98bf5a662b2c59f019fc9514955",
+      "mode": "100644"
+    },
     "app/availability/page.tsx": {
-      "blob": "77c85daa6549da988ec7f2448bfbe80a617e052f",
+      "blob": "57d4cd3eace12a6c3ef2851067cf9fd75124cf78",
       "mode": "100644"
     },
     "app/calendar/calendar-dashboard.tsx": {
@@ -462,11 +470,11 @@
       "mode": "100644"
     },
     "app/cases/cases-dashboard.tsx": {
-      "blob": "f401e8a28c3a0bd738d798c371a49fc3555b056c",
+      "blob": "ecccd4208f58757306077d5b7324ae2aa884213a",
       "mode": "100644"
     },
     "app/cases/new/new-case-form.tsx": {
-      "blob": "8d93735394c2c1b58bc99db705123584782bb8d2",
+      "blob": "ce3eead4bcd92a32cf2ff17c2e4c397d64922125",
       "mode": "100644"
     },
     "app/cases/new/page.tsx": {
@@ -678,7 +686,7 @@
       "mode": "100644"
     },
     "components/home/home-page.tsx": {
-      "blob": "ce5c99634f903e603a6330f3667473d180e0eccb",
+      "blob": "332ae89ef0a1993917642767ddaca10a6964f8f1",
       "mode": "100644"
     },
     "components/home/public-cases.tsx": {
@@ -1262,7 +1270,7 @@
       "mode": "100644"
     },
     "lib/release.ts": {
-      "blob": "dc1d4802ef08052445c4bd6fc98fae5ed7bc9edd",
+      "blob": "c69a883f294b68e76a3d9c3659b74744ebaeb544",
       "mode": "100644"
     },
     "lib/server/admin.ts": {
@@ -1286,7 +1294,7 @@
       "mode": "100644"
     },
     "lib/server/case-sms-followup.ts": {
-      "blob": "c417d6e733452027df6b3f1659225e6153af62ad",
+      "blob": "a5f203c204c5e03ac3aad8afd3083d240b0b2a39",
       "mode": "100644"
     },
     "lib/server/completion-feedback.ts": {
@@ -1446,7 +1454,7 @@
       "mode": "100644"
     },
     "public/sw.js": {
-      "blob": "38ad71ddd1d51b0f4e5eee3351931c5453da94d4",
+      "blob": "2d186dd06b9ecffeefdd4695cf68e8231066b973",
       "mode": "100644"
     },
     "public/window.svg": {
@@ -1486,11 +1494,11 @@
       "mode": "100644"
     },
     "scripts/verify-admin-push-test.mjs": {
-      "blob": "1dc111bfec13ca24f8afd36cd94739a1763d6445",
+      "blob": "84cc5bc4ee0f2e6ff9e94897144f7d12279029f6",
       "mode": "100644"
     },
     "scripts/verify-admin-push.mjs": {
-      "blob": "3732cf064c4f3a07697c8d14483a0d1cf0b65036",
+      "blob": "22e5644e1a9d4c78a3b91fb42d23db16c22bd28a",
       "mode": "100644"
     },
     "scripts/verify-approval-sms.mjs": {
@@ -1529,16 +1537,20 @@
       "blob": "644bc47dafe441f17a21e0a6ada91f55d7090923",
       "mode": "100644"
     },
+    "scripts/verify-contacts-and-expiry.mjs": {
+      "blob": "8ad90e683cf36f55c6ced775da0d55e31f5b9381",
+      "mode": "100644"
+    },
     "scripts/verify-core-features.mjs": {
       "blob": "e000c0db896542bb930cebc02bd4fb80d3584a38",
       "mode": "100644"
     },
     "scripts/verify-dashboard-history-ui.mjs": {
-      "blob": "f19ce8c1e67eb3f3fc749f40ec308b960b4fc633",
+      "blob": "b2331bd82bae02540c9184f6545287cbd1ccbc32",
       "mode": "100644"
     },
     "scripts/verify-emergency-availability.mjs": {
-      "blob": "c751f94109ce9aa7fd23d55a1c4d204c5d4e3f20",
+      "blob": "dff9429fa2c225036694114504acff1a6f102eb7",
       "mode": "100644"
     },
     "scripts/verify-google-auth.mjs": {
@@ -1610,7 +1622,7 @@
       "mode": "100644"
     },
     "scripts/verify-sms-followup.mjs": {
-      "blob": "a9b13a9f2e2e3e09d6b5fdc332fc41883f686090",
+      "blob": "a74206be6d5891e6df8e3bc3609eb611b63b4776",
       "mode": "100644"
     },
     "scripts/verify-task16.mjs": {
@@ -1663,8 +1675,8 @@
     }
   },
   "project_id": "appgprj_6aa15e229eb8819183ce0683ef0a4d8c",
-  "published_at": "2026-10-24T16:14:22.758231+00:00",
-  "pwa_version": "1.17",
-  "sites_commit": "18a8d3a2de5d384e3a1fceabd810942bec3319f6",
-  "sites_version": 139
+  "published_at": "2026-10-24T17:04:57.036059+00:00",
+  "pwa_version": "1.19",
+  "sites_commit": "3b273e88b62c70c0a8c9b5efa20b98cf756e3896",
+  "sites_version": 140
 }

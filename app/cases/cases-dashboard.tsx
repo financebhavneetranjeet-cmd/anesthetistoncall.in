@@ -14,6 +14,7 @@ type CaseItem = {
   location: string | null;
   anaesthesiaType: string;
   scheduledAt: string;
+  expiresAt: string;
   offeredFeePaise: number;
   status: string;
   urgency: string;
@@ -40,6 +41,7 @@ type ResponseItem = {
   message: string | null;
   status: string;
   clinicianName: string;
+  mobile: string | null;
   qualification: string;
   verificationStatus: string;
   createdAt: string;
@@ -51,6 +53,12 @@ type ResponseItem = {
   reliability?: { score:number|null;rating:number;ratingCount:number;completedCases:number;arrivalPerformance:string };
 };
 type ResponseMap={hospital:{name:string;latitude:number;longitude:number}};
+function contactNumber(mobile: string | null) {
+  if (!mobile) return null;
+  const digits = mobile.replace(/\D/g, "");
+  if (digits.length < 10 || digits.length > 15) return null;
+  return digits.length === 10 ? `+91${digits}` : `+${digits}`;
+}
 
 export function CasesDashboard({
   role,
@@ -78,7 +86,7 @@ export function CasesDashboard({
       cases: CaseItem[];
       error?: { message?: string };
     };
-    if (response.ok) setItems(result.cases);
+    if (response.ok) setItems(result.cases.filter(item => new Date(item.expiresAt).getTime() > Date.now()));
     else setMessage(result.error?.message ?? "Unable to load cases.");
   }, []);
   useEffect(() => {
@@ -94,6 +102,15 @@ export function CasesDashboard({
       clearTimeout(timer);
     };
   }, [load]);
+  useEffect(() => {
+    const next = Math.min(...items.map(item => new Date(item.expiresAt).getTime()).filter(time => Number.isFinite(time) && time > Date.now()));
+    if (!Number.isFinite(next)) return;
+    const timer = window.setTimeout(() => {
+      setItems(previous => previous.filter(item => new Date(item.expiresAt).getTime() > Date.now()));
+      void load();
+    }, Math.max(0, next - Date.now() + 10));
+    return () => window.clearTimeout(timer);
+  }, [items, load]);
 
   async function act(url: string, options: RequestInit, success: string) {
     const response = await fetch(url, options);
@@ -297,6 +314,7 @@ export function CasesDashboard({
                   >
                     <span className="min-w-0 break-words">
                       <b>{response.clinicianName}</b> · {response.qualification}
+                      {contactNumber(response.mobile) ? <span className="mt-1 block text-sm"><span className="font-semibold">Phone: {response.mobile}</span> · <a className="font-bold text-blue-700 underline" href={`tel:${contactNumber(response.mobile)}`}>Call</a> · <a className="font-bold text-blue-700 underline" href={`sms:${contactNumber(response.mobile)}`}>SMS</a></span> : <span className="mt-1 block text-sm text-amber-800">Phone number unavailable. Ask the anaesthetist to update their verified account.</span>}
                       <span className="mt-1 block text-sm text-black">Verification: <b className="capitalize text-emerald-700">{response.verificationStatus}</b> · Distance: <b>{response.distanceMetres!=null?`${(response.distanceMetres/1000).toFixed(1)} km`:"Not shared"}</b>{response.etaMinutes?` · ETA ${response.etaMinutes} min`:""} · Responded {responseTime(response.createdAt)}</span>
                       <span className="mt-2 block text-sm text-slate-800">Hospital posted fee: ₹{(item.offeredFeePaise / 100).toLocaleString("en-IN")} · Additional bid: ₹{(response.additionalFeePaise / 100).toLocaleString("en-IN")}</span>
                       <span className="mt-1 block text-base font-bold text-emerald-900">Total demanded fee for anaesthesia: ₹{(response.totalFeePaise / 100).toLocaleString("en-IN")}</span>

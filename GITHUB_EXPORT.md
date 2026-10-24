@@ -1,10 +1,10 @@
 # Anesthetist on Call
 
-Published Sites version 139, PWA 1.17.
+Published Sites version 140, PWA 1.19.
 
-Source: `18a8d3a2de5d384e3a1fceabd810942bec3319f6`
+Source: `3b273e88b62c70c0a8c9b5efa20b98cf756e3896`
 
-Publication: 2026-10-24T16:14:22.758231+00:00
+Publication: 2026-10-24T17:04:57.036059+00:00
 
 Website: https://anesthetistoncall.in
 

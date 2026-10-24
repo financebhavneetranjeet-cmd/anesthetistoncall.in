@@ -16,17 +16,15 @@ export function NewCaseForm() {
     setMessage("");
     const form = new FormData(event.currentTarget);
     const fee = String(form.get("fee") ?? "").trim();
-    const age = String(form.get("patientAge") ?? "").trim();
     const duration = String(form.get("duration") ?? "").trim();
     requestId.current ??= crypto.randomUUID();
     const body = {
       requestId: requestId.current,
       procedureName: form.get("procedureName"), location: form.get("location"),
       scheduledAt: new Date(`${String(form.get("caseDate"))}T${String(form.get("reportingTime"))}`).toISOString(),
-      offeredFeeRupees: fee ? Number(fee) : undefined, urgency: form.get("urgency"),
+      offeredFeeRupees: fee ? Number(fee) : undefined, urgency: form.get("emergency") === "yes" ? "emergency" : "routine",
       durationMinutes: duration ? Number(duration) : undefined, biddingEnabled: form.get("biddingEnabled") === "on",
-      publicNotes: form.get("publicNotes") || undefined, patientAge: age ? Number(age) : undefined,
-      patientSex: form.get("patientSex") || undefined,
+      publicNotes: form.get("publicNotes") || undefined,
     };
     const response = await fetch("/api/cases", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const result = await response.json() as { error?: { message?: string } };
@@ -44,9 +42,7 @@ export function NewCaseForm() {
       <Field name="location" label="Hospital or location" required />
       <Field name="caseDate" label="Date" type="date" required /><Field name="reportingTime" label="Reporting time" type="time" required />
       <Field name="duration" label="Estimated case duration (minutes)" type="number" min="15" required />
-      <label className="grid min-w-0 gap-1 text-sm font-medium">Urgency<select name="urgency" className="h-12 min-w-0 w-full rounded-xl border p-3"><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="emergency">Emergency</option></select></label>
-      <Field name="patientAge" label="Patient age (optional)" type="number" min="0" />
-      <label className="grid min-w-0 gap-1 text-sm font-medium">Patient sex (optional)<select name="patientSex" className="h-12 min-w-0 w-full rounded-xl border p-3"><option value="">Not provided</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option></select></label>
+      <label className="grid min-w-0 gap-1 text-sm font-medium">Emergency?<select name="emergency" className="h-12 min-w-0 w-full rounded-xl border p-3"><option value="no">No</option><option value="yes">Yes</option></select></label>
       <Field name="fee" label="Posted anaesthetist fee (₹)" type="number" min="1" required />
       <label className="flex min-h-12 items-center gap-3 rounded-xl border px-3 py-2 text-sm font-medium"><input name="biddingEnabled" type="checkbox" className="size-5 accent-blue-700" /> Allow optional fee bids</label>
       <label className="grid min-w-0 gap-1 text-sm font-medium sm:col-span-2">Additional notes<textarea name="publicNotes" maxLength={1000} className="min-h-28 min-w-0 w-full rounded-xl border p-3" /></label>
