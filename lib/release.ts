@@ -18,6 +18,7 @@ export const RELEASES = [
   { version: "1.17", name: "SMS Follow-up and Urgent Search" },
   { version: "1.18", name: "Clear Replacement Numbers and SMS Launch" },
   { version: "1.19", name: "Verified Contacts and Clear Case Posting" },
+  { version: "1.20", name: "Clear Case Notifications" },
 ] as const;
 
 export const CURRENT_RELEASE = RELEASES.at(-1)!;

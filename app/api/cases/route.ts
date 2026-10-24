@@ -36,6 +36,10 @@ export async function POST(request: Request) {
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "Invalid case details.");
   if (new Date(parsed.data.scheduledAt).getTime() <= Date.now()) return jsonError("Scheduled time must be in the future.");
   const caseId = parsed.data.requestId ?? crypto.randomUUID(); const d = parsed.data;
+  const hospital = await env.DB.prepare("SELECT name FROM hospitals WHERE id=? AND approval_status='approved'").bind(user.hospitalId).first<{ name: string }>();
+  if (!hospital) return jsonError("Approved hospital unavailable.", 403, "HOSPITAL_APPROVAL_REQUIRED");
+  const scheduledTime = new Date(d.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+  const noticeBody = `${d.procedureName} at ${hospital.name} on ${scheduledTime} IST. Sent by ${user.fullName || "hospital personnel"}.`;
   await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO cases (id, hospital_id, posted_by_user_id, procedure_name, specialty, location, anaesthesia_type, scheduled_at, offered_fee_paise, urgency, duration_minutes, public_notes, bidding_enabled, status, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)").bind(caseId, user.hospitalId, user.id, d.procedureName, d.specialty || null, d.location, d.anaesthesiaType || "Not specified", d.scheduledAt, d.offeredFeeRupees * 100, d.urgency, d.durationMinutes, d.publicNotes ?? null, d.biddingEnabled ? 1 : 0),
     env.DB.prepare("INSERT OR IGNORE INTO case_private_details (id, case_id, patient_initials, patient_age, patient_sex, contact_phone, location_instructions, clinical_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(caseId, caseId, d.patientInitials ?? null, null, null, d.contactPhone ?? null, d.locationInstructions ?? null, d.clinicalNotes ?? null),
@@ -46,7 +50,7 @@ export async function POST(request: Request) {
       AND cp.verification_status='verified' AND (EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id AND a.status='available' AND datetime(a.start_at)<=CURRENT_TIMESTAMP AND datetime(a.end_at)>CURRENT_TIMESTAMP)
       OR (cp.case_notifications_enabled=1 AND cp.availability_status='available' AND datetime(cp.available_until)>CURRENT_TIMESTAMP
         AND NOT EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id)))
-      AND lower(cp.city)=lower((SELECT city FROM hospitals WHERE id=?))`).bind(caseId, d.urgency, `${d.procedureName} at ${d.location} is open for responses.`, caseId, user.hospitalId),
+      AND lower(cp.city)=lower((SELECT city FROM hospitals WHERE id=?))`).bind(caseId, d.urgency, noticeBody, caseId, user.hospitalId),
     env.DB.prepare("INSERT OR IGNORE INTO notification_deliveries(id,notification_id,channel,status) SELECT 'in-app:'||id,id,'in_app','sent' FROM notifications WHERE case_id=? AND kind='case_open'").bind(caseId),
     env.DB.prepare("INSERT OR IGNORE INTO notification_deliveries(id,notification_id,channel,status,error_code) SELECT 'sms:'||id,id,'sms','skipped','SMS_PENDING' FROM notifications WHERE case_id=? AND kind='case_open'").bind(caseId),
   ]);

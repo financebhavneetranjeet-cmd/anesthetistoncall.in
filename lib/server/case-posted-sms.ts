@@ -14,6 +14,7 @@ type CaseSmsRow = {
   procedureName: string;
   specialty: string | null;
   hospitalName: string;
+  postedByName: string | null;
   location: string | null;
   scheduledAt: string;
   urgency: string;
@@ -25,6 +26,7 @@ function templateVariables(row: CaseSmsRow) {
     procedureName: row.procedureName,
     specialty: row.specialty ?? "Not specified",
     hospitalName: row.hospitalName,
+    postedByName: row.postedByName ?? "Hospital personnel",
     location: row.location ?? row.hospitalName,
     scheduledAt: new Date(row.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" , hour12: true }),
     urgency: row.urgency,
@@ -47,9 +49,9 @@ export async function sendCasePostedSms(deliveryId: string, retry = false): Prom
   if (!env.DB) return "failed";
   const db = env.DB;
   const row = await db.prepare(`SELECT d.id AS deliveryId,d.status,d.error_code AS errorCode,u.mobile,c.procedure_name AS procedureName,
-    c.specialty,h.name AS hospitalName,c.location,c.scheduled_at AS scheduledAt,c.urgency,c.offered_fee_paise AS offeredFeePaise
+    c.specialty,h.name AS hospitalName,poster.full_name AS postedByName,c.location,c.scheduled_at AS scheduledAt,c.urgency,c.offered_fee_paise AS offeredFeePaise
     FROM notification_deliveries d JOIN notifications n ON n.id=d.notification_id JOIN users u ON u.id=n.user_id
-    JOIN cases c ON c.id=n.case_id JOIN hospitals h ON h.id=c.hospital_id
+    JOIN cases c ON c.id=n.case_id JOIN hospitals h ON h.id=c.hospital_id LEFT JOIN users poster ON poster.id=c.posted_by_user_id
     WHERE d.id=? AND d.channel='sms' AND n.kind='case_open' LIMIT 1`)
     .bind(deliveryId).first<CaseSmsRow>();
   if (!row) return "not_found";

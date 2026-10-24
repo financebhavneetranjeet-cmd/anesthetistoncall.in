@@ -9,8 +9,9 @@ import { z } from 'zod';
 const db = new DatabaseSync(':memory:');
 for (const file of readdirSync('drizzle').filter(f => f.endsWith('.sql')).sort()) db.exec(readFileSync(`drizzle/${file}`, 'utf8'));
 const hospitalId = '00000000-0000-4000-8000-000000000001';
-db.exec("INSERT INTO users(id,mobile,full_name,role,status) VALUES('hospital','100','Test Hospital','hospital','verified'),('surgeon','200','Test Surgeon','surgeon','verified')");
-db.prepare("INSERT INTO hospitals(id,owner_user_id,name,address,approval_status) VALUES(?,'hospital','Test Hospital','Test address','approved')").run(hospitalId);
+db.exec("INSERT INTO users(id,mobile,full_name,role,status) VALUES('hospital','100','Test Hospital Administrator','hospital','verified'),('surgeon','200','Test Surgeon','surgeon','verified'),('available','300','Available Anaesthetist','anesthetist','verified')");
+db.prepare("INSERT INTO hospitals(id,owner_user_id,name,address,city,approval_status) VALUES(?,'hospital','Test Hospital','Test address','Amritsar','approved')").run(hospitalId);
+db.exec("INSERT INTO clinician_profiles(id,user_id,state_council,registration_number,qualification,city,verification_status,case_notifications_enabled,availability_status,available_until) VALUES('cp-available','available','PMC','123','MD','Amritsar','verified',1,'available',datetime('now','+1 hour'))");
 const DB = {
   prepare(sql) {
     let args = [];
@@ -43,7 +44,7 @@ const cases = load('app/api/cases/route.ts');
 const planned = load('app/api/planned/route.ts');
 const payload = { hospitalId, procedureName: 'Test procedure', location: 'Test Hospital', scheduledAt: new Date(Date.now() + 86400000).toISOString(), offeredFeeRupees: 5000, urgency: 'routine', durationMinutes: 60 };
 for (const role of ['hospital', 'surgeon']) {
-  user = { id: role, role, status: 'verified', accountStatus: 'active', hospitalId: role === 'hospital' ? hospitalId : null, hospitalApprovalStatus: 'approved', clinicianId: 'profile', clinicianVerificationStatus: 'verified' };
+  user = { id: role, fullName: role === 'hospital' ? 'Test Hospital Administrator' : 'Test Surgeon', role, status: 'verified', accountStatus: 'active', hospitalId: role === 'hospital' ? hospitalId : null, hospitalApprovalStatus: 'approved', clinicianId: 'profile', clinicianVerificationStatus: 'verified' };
   for (const route of role === 'hospital' ? [cases, planned] : [planned]) {
     for (const legacy of [false, true]) {
       const body = { ...payload, ...(legacy ? { specialty: 'Orthopaedics', anaesthesiaType: 'Spinal' } : {}) };
@@ -61,6 +62,9 @@ for (const role of ['hospital', 'surgeon']) {
   }
 }
 assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cases').get().n, 6);
+const caseNotice = db.prepare("SELECT body FROM notifications WHERE kind='case_open' AND user_id='available' LIMIT 1").get()?.body;
+assert.match(caseNotice, /Test procedure at Test Hospital on .* IST\. Sent by Test Hospital Administrator\./);
+assert.doesNotMatch(caseNotice, /5000|rating|patient/i);
 // Exercise the real dashboard query at the publication cutoff, independent of surgery time.
 user = { id: 'hospital', role: 'hospital', status: 'verified', accountStatus: 'active', hospitalId, hospitalApprovalStatus: 'approved' };
 const ids = db.prepare('SELECT id FROM cases WHERE hospital_id=? LIMIT 3').all(hospitalId).map(row => row.id);
