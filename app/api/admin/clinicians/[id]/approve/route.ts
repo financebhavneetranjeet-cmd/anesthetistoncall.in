@@ -20,7 +20,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
   if (mode === "verified" && parsed.data.officialRecordChecked !== true) return jsonError("Admin must confirm review of the official NMC / PMC registration record.", 409, "OFFICIAL_RECORD_REVIEW_REQUIRED");
   if ((mode === "verified" || mode === "manual") && clinician.pmcCount < 1) return jsonError("PMC certificate must be uploaded before approval.", 409, "PMC_DOCUMENT_REQUIRED");
-  if (mode === "manual" && clinician.pmcCount < 1) return jsonError("PMC certificate must be uploaded before manual approval.", 409, "PMC_DOCUMENT_REQUIRED");
   const pmcStatus = mode === "manual" ? "manual" : "success";
   await env.DB.batch([
     env.DB.prepare("UPDATE clinician_profiles SET verification_status='verified', pmc_verification_status=?, pmc_verification_checked_at=CURRENT_TIMESTAMP, pmc_verification_note=? WHERE id=?").bind(pmcStatus, mode === "manual" ? "Certificate reviewed by administrator." : "PMC registration verified by administrator.", id),
