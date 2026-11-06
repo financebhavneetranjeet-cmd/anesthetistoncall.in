@@ -26,8 +26,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     await env.DB.prepare("UPDATE clinician_profiles SET pmc_verification_status=?, pmc_verification_checked_at=CURRENT_TIMESTAMP, pmc_verification_note=? WHERE id=?")
       .bind(pmcStatus, evidence, id).run();
     await recordAdminAudit("clinician_verification_reviewed", "clinician", id);
-    return jsonOk({ clinician: { id, verificationStatus: "pending", pmcVerificationStatus: clinician.pmcVerificationStatus } });
+    return jsonOk({ clinician: { id, verificationStatus: "pending", pmcVerificationStatus: pmcStatus } });
   }
+  if (clinician.pmcVerificationStatus === "manual" && clinician.pmcCount < 1) return jsonError("Manual review certificate missing.", 409, "PMC_DOCUMENT_REQUIRED");
   if (!["success", "manual"].includes(clinician.pmcVerificationStatus)) return jsonError("Complete and record medical council verification before approval.", 409, "VERIFICATION_REQUIRED");
   await env.DB.batch([
     env.DB.prepare("UPDATE clinician_profiles SET verification_status='verified' WHERE id=? AND verification_status='pending'").bind(id),
@@ -44,5 +45,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   } catch (error) {
     console.error("Clinician approval push failed", error instanceof Error ? error.name : "unknown_error");
   }
-  return jsonOk({ clinician: { id, verificationStatus: "verified", pmcVerificationStatus: pmcStatus } });
+  return jsonOk({ clinician: { id, verificationStatus: "verified", pmcVerificationStatus: clinician.pmcVerificationStatus } });
 }
