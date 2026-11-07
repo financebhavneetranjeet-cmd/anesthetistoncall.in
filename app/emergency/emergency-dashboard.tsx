@@ -1,4 +1,5 @@
 "use client";
+import { TimeField } from "@/components/time-field";
 import { useCallback, useEffect, useState } from "react";
 import Link from "@/components/native-link";
 import {
@@ -180,7 +181,7 @@ export function EmergencyDashboard({ role }: { role: string }) {
               <p className="mt-3">
                 <Clock3 className="mr-1 inline size-4" />
                 Arrival required{" "}
-                {new Date(c.requiredArrivalAt).toLocaleString("en-IN")}
+                {new Date(c.requiredArrivalAt).toLocaleString("en-IN", { hour12: true })}
               </p>
               <p className="mt-1 text-sm text-slate-500">
                 Elapsed{" "}
@@ -373,7 +374,7 @@ function PostForm({
       </select>
       <label className="grid gap-1 text-sm font-semibold">
         Required arrival time
-        <input
+        <TimeField
           required
           name="requiredArrivalAt"
           type="datetime-local"

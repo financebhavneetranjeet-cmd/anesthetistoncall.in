@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ArrowRightLeft, CalendarClock, RefreshCw, Building2, Stethoscope, Plus, Clock3, ClipboardList, UserRoundCheck, MessageSquare } from "lucide-react";
 import { CaseSms } from "@/components/case-sms";
 import Link from "@/components/native-link";
 import { CaseResponderMap } from "./case-responder-map";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import type { DashboardRole } from "@/lib/dashboard-roles";
 import { DashboardChoices } from "@/components/auth/dashboard-choices";
+import { AvailableClinicians } from "@/app/availability/available-clinicians";
 
 type CaseItem = {
   id: string;
@@ -14,12 +17,16 @@ type CaseItem = {
   location: string | null;
   anaesthesiaType: string;
   scheduledAt: string;
+  expiresAt: string;
   offeredFeePaise: number;
   status: string;
   urgency: string;
   durationMinutes: number | null;
+  caseStartedAt: string | null;
   publicNotes: string | null;
   hospitalName: string;
+  postedByName: string | null;
+  postedByRole: string | null;
   biddingEnabled: number;
   responseCount: number;
   currentResponseStatus: string | null;
@@ -37,8 +44,12 @@ type ResponseItem = {
   message: string | null;
   status: string;
   clinicianName: string;
+  mobile: string | null;
   qualification: string;
   verificationStatus: string;
+  registrationNumber: string | null;
+  stateCouncil: string | null;
+  nmcRecordMatched: number;
   createdAt: string;
   distanceMetres: number | null;
   etaMinutes: number | null;
@@ -48,18 +59,30 @@ type ResponseItem = {
   reliability?: { score:number|null;rating:number;ratingCount:number;completedCases:number;arrivalPerformance:string };
 };
 type ResponseMap={hospital:{name:string;latitude:number;longitude:number}};
+function contactNumber(mobile: string | null) {
+  if (!mobile) return null;
+  const digits = mobile.replace(/\D/g, "");
+  if (digits.length < 10 || digits.length > 15) return null;
+  return digits.length === 10 ? `+91${digits}` : `+${digits}`;
+}
 
 export function CasesDashboard({
   role,
   approved,
   viewerUserId,
   dualDashboard,
+  displayName,
+  dashboardRoles,
 }: {
+  dashboardRoles?: DashboardRole[];
+  displayName?: string;
   role: string;
   approved: boolean;
   viewerUserId: string;
   dualDashboard: boolean;
 }) {
+  const isPoster = role === "hospital" || role === "surgeon";
+  const [loaded, setLoaded] = useState(false);
   const [items, setItems] = useState<CaseItem[]>([]);
   const [responses, setResponses] = useState<Record<string, ResponseItem[]>>(
     {},
@@ -70,20 +93,36 @@ export function CasesDashboard({
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const load = useCallback(async () => {
-    const response = await fetch("/api/cases");
+    const response = await fetch("/api/cases", { cache: "no-store" });
     const result = (await response.json()) as {
       cases: CaseItem[];
       error?: { message?: string };
     };
-    if (response.ok) setItems(result.cases);
+    if (response.ok) { setItems(result.cases.filter(item => new Date(item.expiresAt).getTime() > Date.now())); setLoaded(true); }
     else setMessage(result.error?.message ?? "Unable to load cases.");
   }, []);
   useEffect(() => {
     const timer = setTimeout(() => void load(), 0);
+    const refresh = () => { if(document.visibilityState === "visible") void load().catch(()=>setMessage("Unable to refresh cases. Please retry.")); };
+    const poll=setInterval(refresh,15000);
+    window.addEventListener("focus",refresh);
+    document.addEventListener("visibilitychange",refresh);
     return () => {
+      clearInterval(poll);
+      window.removeEventListener("focus",refresh);
+      document.removeEventListener("visibilitychange",refresh);
       clearTimeout(timer);
     };
   }, [load]);
+  useEffect(() => {
+    const next = Math.min(...items.map(item => new Date(item.expiresAt).getTime()).filter(time => Number.isFinite(time) && time > Date.now()));
+    if (!Number.isFinite(next)) return;
+    const timer = window.setTimeout(() => {
+      setItems(previous => previous.filter(item => new Date(item.expiresAt).getTime() > Date.now()));
+      void load();
+    }, Math.max(0, next - Date.now() + 10));
+    return () => window.clearTimeout(timer);
+  }, [items, load]);
 
   async function act(url: string, options: RequestInit, success: string) {
     const response = await fetch(url, options);
@@ -93,6 +132,17 @@ export function CasesDashboard({
     );
     if (response.ok) void load();
     return response.ok;
+  }
+  async function notifyResponder(caseId: string, response: ResponseItem) {
+    try {
+      await act(`/api/cases/${caseId}/notify-responder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ responseId: response.id }),
+      }, `App notification added for ${response.clinicianName}.`);
+    } catch {
+      setMessage("Unable to send the app notification. Please try again.");
+    }
   }
   async function showResponses(id: string) {
     const response = await fetch(`/api/cases/${id}/bids`);
@@ -127,32 +177,37 @@ export function CasesDashboard({
   return (
     <main className="aoc-dashboard min-h-dvh bg-slate-50 px-3 py-5 sm:px-4 sm:py-8">
       <div className="mx-auto max-w-5xl">
-        {dualDashboard && <div className="mb-5"><DashboardChoices roles={["anesthetist", "admin"]} currentRole={role} /></div>}
-        <header className="flex flex-wrap items-start justify-between gap-4">
+        {(dashboardRoles ? dashboardRoles.length > 1 : dualDashboard) && <div className="mb-5"><DashboardChoices roles={dashboardRoles ?? ["anesthetist", "admin"]} currentRole={role} /></div>}
+        <header className={isPoster ? "flex flex-wrap items-start justify-between gap-5 rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-5 shadow-sm sm:p-7" : "flex flex-wrap items-start justify-between gap-4"}>
           <div>
             <p className="text-sm font-semibold text-blue-700">
               ANESTHETIST ON CALL
             </p>
-            <h1 className="text-2xl font-bold sm:text-3xl">Your cases</h1>
+            {isPoster && <span className="mt-4 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-800">{role === "hospital" ? <Building2 aria-hidden="true" className="size-4" /> : <Stethoscope aria-hidden="true" className="size-4" />}{role === "hospital" ? "Hospital dashboard" : "Surgeon dashboard"}</span>}
+            <h1 className="mt-2 break-words text-2xl font-bold sm:text-3xl">{isPoster ? displayName || (role === "hospital" ? "Hospital dashboard" : "Surgeon dashboard") : "Your cases"}</h1>
+            {isPoster && <p className="mt-2 max-w-lg text-sm leading-6">Your cases, responses and anaesthesia support in one place.</p>}
           </div>
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:gap-3">
-            <button type="button" onClick={()=>window.location.reload()} className="grid min-h-11 place-items-center rounded-xl border border-blue-300 bg-blue-50 px-4 py-2 font-semibold text-blue-800">Refresh page</button>
+          <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:flex-wrap sm:gap-3">
+            <button type="button" onClick={()=>window.location.reload()} className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"><RefreshCw aria-hidden="true" className="size-5 shrink-0 motion-safe:transition-transform motion-safe:group-hover:rotate-180" />Refresh page</button>
             {role !== "anesthetist" && <NotificationBell />}
             {role === "hospital" || role === "surgeon" ? (
-              (role === "surgeon" || approved) && <Link href={role === "surgeon" ? "/planned" : "/cases/new"} className="grid min-h-12 place-items-center rounded-xl bg-blue-700 px-4 py-2 font-semibold text-white">Post a Case</Link>
+              (role === "surgeon" || approved) && <Link href={role === "surgeon" ? "/planned" : "/cases/new"} className="order-first col-span-2 inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-blue-700 to-indigo-800 px-6 py-4 text-lg font-bold text-white shadow-md transition hover:from-blue-800 hover:to-indigo-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 sm:order-none"><Plus aria-hidden="true" className="size-6" />Post a Case</Link>
             ) : <>
             <Link
               href="/calendar"
-              className="grid min-h-11 place-items-center rounded-xl border border-[#4CAF50] aoc-light-green bg-[#E8F5E9] px-4 py-2 font-semibold text-[#1B5E20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B5E20]"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-emerald-700 bg-emerald-700 px-4 py-3 text-center font-semibold text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
             >
+              <CalendarClock aria-hidden="true" className="size-5 shrink-0" />
               Show Your Availability
             </Link>
+            {role !== "anesthetist" && (
             <Link
               href="/payments"
               className="grid min-h-11 place-items-center rounded-xl border border-[#4CAF50] aoc-light-green bg-[#E8F5E9] px-4 py-2 font-semibold text-[#1B5E20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B5E20]"
             >
               Payments
             </Link>
+            )}
             {role !== "anesthetist" && (
             <Link
               href="/notifications"
@@ -161,17 +216,19 @@ export function CasesDashboard({
               Notifications
             </Link>
             )}
-            {role === "anesthetist" && (
-              <Link
-                href="/emergency"
-                className="col-span-2 grid min-h-11 place-items-center rounded-xl bg-red-700 px-4 py-2 font-bold text-white"
-              >
-                🚨 Emergency / SOS
-              </Link>
-            )}
+            {role === "anesthetist" && <Link href="/replacement" className="col-span-2 flex min-h-20 items-center justify-center gap-3 rounded-2xl bg-gradient-to-br from-blue-700 to-indigo-800 px-5 py-4 text-center text-white shadow-md transition hover:from-blue-800 hover:to-indigo-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/15"><ArrowRightLeft aria-hidden="true" className="size-5" /></span><span><span className="block font-bold">Find Another Anesthetist</span><span className="mt-1 block text-sm font-medium text-blue-100">Request a replacement</span></span></Link>}
             </>}
           </div>
         </header>
+        <section id="available-anaesthetists" className="mt-5 rounded-3xl border border-emerald-200 bg-white p-4 shadow-sm sm:p-6">
+          <AvailableClinicians embedded />
+        </section>
+        {isPoster && <section aria-label="Case overview" aria-busy={!loaded} className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+          <OverviewCard label="Active Cases" value={loaded ? items.length : null} icon={<ClipboardList aria-hidden="true" className="size-5" />} tone="blue" />
+          <OverviewCard label="Awaiting Selection" value={loaded ? items.filter(item=>item.status === "open").length : null} icon={<Clock3 aria-hidden="true" className="size-5" />} tone="amber" />
+          <OverviewCard label="Selected / Assigned" value={loaded ? items.filter(item=>["offered","assigned"].includes(item.status)).length : null} icon={<UserRoundCheck aria-hidden="true" className="size-5" />} tone="emerald" />
+          <p className="col-span-2 text-xs leading-5 sm:col-span-3">Counts cover cases currently shown in the active dashboard’s 12-hour window. Selection may still await acceptance.</p>
+        </section>}
         {message && (
           <p
             role="status"
@@ -183,62 +240,30 @@ export function CasesDashboard({
         <div className="mt-6 grid gap-4 sm:mt-7 sm:gap-5">
           {items.length === 0 && (
             <div className="rounded-2xl border bg-white p-6 text-black sm:p-8">
-              No cases available right now.
+              {loaded ? "No cases available right now." : "Loading your cases…"}
             </div>
           )}
           {items.map((item) => (
             <article
               id={`case-${item.id}`}
               key={item.id}
-              className="min-w-0 rounded-2xl border bg-white p-4 shadow-sm sm:p-5"
+              className={isPoster ? "min-w-0 rounded-3xl border border-slate-200 border-l-4 border-l-blue-600 bg-white p-5 shadow-sm sm:p-6" : "min-w-0 rounded-2xl border bg-white p-4 shadow-sm sm:p-5"}
             >
+              {isPoster ? <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${item.status === "assigned" ? "bg-emerald-100 text-emerald-900" : ["open","offered","pending"].includes(item.status) ? "bg-amber-100 text-amber-900" : "bg-slate-100 text-slate-800"}`}><span aria-hidden="true" className="size-1.5 rounded-full bg-current" />{statusLabel(item.status)}</span><span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600"><MessageSquare aria-hidden="true" className="size-4" />{item.responseCount} {item.responseCount === 1 ? "response" : "responses"}</span></div> : <p className="mb-3 font-bold text-blue-800">{item.status === "open" ? "Open case" : "Your active case"}</p>}
               <div className="grid min-w-0 gap-3 sm:flex sm:flex-wrap sm:justify-between">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap gap-2">
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold uppercase text-blue-800">
-                      {item.urgency}
-                    </span>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase text-emerald-800">
-                      {statusLabel(item.status)}
-                    </span>
-                  </div>
-                  <h2 className="mt-3 break-words text-xl font-bold">
+                  <h2 className="break-words text-xl font-bold">
                     {item.procedureName}
                   </h2>
-                  <p className="break-words text-black">
-                    {item.specialty || "Specialty not specified"} ·{" "}
-                    {item.hospitalName}
+                  <p className="mt-2 break-words font-semibold text-black">At {item.hospitalName}</p>
+                  <p className={isPoster ? "mt-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-lg font-bold leading-7" : "mt-2 text-sm leading-6"}>
+                    Reporting time: {new Date(item.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).replace(/\b(am|pm)\b/g, value => value.toUpperCase())}
                   </p>
-                  <p className="break-words text-black">
-                    {item.location || item.hospitalName} ·{" "}
-                    {item.anaesthesiaType}
+                  <p className="mt-2 break-words text-sm text-black">
+                    Sent by: {item.postedByName || "Name unavailable"} · {item.postedByRole === "anesthetist" ? "Anaesthetist" : item.postedByRole === "hospital" ? "Hospital personnel" : item.postedByRole === "surgeon" ? "Surgeon" : "Role unavailable"}
                   </p>
-                  {role === "anesthetist" && item.hospitalReliability && <p className="mt-2 text-sm text-black">⭐ {item.hospitalReliability.ratingCount?item.hospitalReliability.rating:'New'} · Hospital reliability <b>{item.hospitalReliability.score==null?"Not enough data":`${item.hospitalReliability.score}/100`}</b> · Payment {item.hospitalReliability.paymentReliability==null?"No history":`${item.hospitalReliability.paymentReliability}%`} · {item.hospitalReliability.completedCases} completed</p>}
-                </div>
-                <div className="sm:text-right">
-                  <p className="text-lg font-bold">
-                    {item.offeredFeePaise > 0
-                      ? `₹${(item.offeredFeePaise / 100).toLocaleString("en-IN")}`
-                      : "Fee not specified"}
-                  </p>
-                  {Boolean(item.biddingEnabled) && item.status === "open" && (
-                    <p className="text-sm text-slate-500">
-                      Optional bidding enabled
-                    </p>
-                  )}
                 </div>
               </div>
-              <p className="mt-4 text-sm leading-6">
-                Report: {new Date(item.scheduledAt).toLocaleString("en-IN")}{" "}
-                {item.durationMinutes
-                  ? `· ${item.durationMinutes} min expected`
-                  : ""}
-              </p>
-              {item.publicNotes && (
-                <p className="mt-2 break-words text-black">
-                  {item.publicNotes}
-                </p>
-              )}
               {role === "anesthetist" && item.status === "open" && (
                 <div className="mt-5 border-t pt-4">
                   {item.currentResponseStatus === "available" ? (
@@ -308,7 +333,7 @@ export function CasesDashboard({
               {role === "hospital" && item.status === "open" && (
                 <button
                   onClick={() => void showResponses(item.id)}
-                  className="mt-5 min-h-11 w-full rounded-xl border px-4 py-2 font-semibold sm:w-auto"
+                  className="mt-5 min-h-12 w-full rounded-2xl bg-blue-700 px-5 py-3 font-bold text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 sm:w-auto"
                 >
                   View {item.responseCount} response
                   {item.responseCount === 1 ? "" : "s"}
@@ -324,16 +349,20 @@ export function CasesDashboard({
                   >
                     <span className="min-w-0 break-words">
                       <b>{response.clinicianName}</b> · {response.qualification}
+                      {contactNumber(response.mobile) ? <span className="mt-1 block text-sm"><span className="font-semibold">Phone: {response.mobile}</span> · <a className="font-bold text-blue-700 underline" href={`tel:${contactNumber(response.mobile)}`}>Call</a> · <a className="font-bold text-blue-700 underline" href={`sms:${contactNumber(response.mobile)}`}>SMS</a></span> : <span className="mt-1 block text-sm text-amber-800">Phone number unavailable. Ask the anaesthetist to update their verified account.</span>}
+                      {response.registrationNumber && <span className="mt-1 block text-sm">
+                        <b>{response.stateCouncil === "Punjab Medical Council" ? "PMC No." : response.stateCouncil ?? "Medical registration"}</b> {response.registrationNumber}
+                        {Boolean(response.nmcRecordMatched) && <span className="ml-2 font-semibold text-emerald-800">Verified against NMC records by Admin</span>}
+                      </span>}
                       <span className="mt-1 block text-sm text-black">Verification: <b className="capitalize text-emerald-700">{response.verificationStatus}</b> · Distance: <b>{response.distanceMetres!=null?`${(response.distanceMetres/1000).toFixed(1)} km`:"Not shared"}</b>{response.etaMinutes?` · ETA ${response.etaMinutes} min`:""} · Responded {responseTime(response.createdAt)}</span>
                       <span className="mt-2 block text-sm text-slate-800">Hospital posted fee: ₹{(item.offeredFeePaise / 100).toLocaleString("en-IN")} · Additional bid: ₹{(response.additionalFeePaise / 100).toLocaleString("en-IN")}</span>
                       <span className="mt-1 block text-base font-bold text-emerald-900">Total demanded fee for anaesthesia: ₹{(response.totalFeePaise / 100).toLocaleString("en-IN")}</span>
                       {response.match && <span className="mt-1 block text-sm text-blue-700"><b>Recommended Match — {response.match.score}/100</b> · {response.match.reasons.join(" • ")}</span>}
-                      {response.reliability && <span className="mt-1 block text-sm text-black">⭐ {response.reliability.ratingCount?response.reliability.rating:'New'} · Reliability <b>{response.reliability.score==null?"Not enough data":`${response.reliability.score}/100`}</b> · {response.reliability.completedCases} completed · Arrival {response.reliability.arrivalPerformance}</span>}
                     </span>
-                    <div className="grid gap-2 sm:flex"><button disabled={!response.latitude||!response.longitude} onClick={()=>setSelectedMapResponder(value=>({...value,[item.id]:response.id}))} className="min-h-11 w-full rounded-lg border border-blue-300 px-3 py-2 font-semibold text-blue-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">View on Map</button><button
+                    <div className="grid gap-2 sm:flex sm:flex-wrap">{role === "hospital" && <button type="button" onClick={() => void notifyResponder(item.id, response)} className="min-h-11 rounded-lg border border-blue-300 px-3 py-2 font-semibold text-blue-800">Send App Notification</button>}<button disabled={!response.latitude||!response.longitude} onClick={()=>setSelectedMapResponder(value=>({...value,[item.id]:response.id}))} className="min-h-11 w-full rounded-lg border border-blue-300 px-3 py-2 font-semibold text-blue-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">View on Map</button><button
                       disabled={selectingCaseId !== null}
                       onClick={() => void selectAnaesthetist(item.id,response)}
-                      className="min-h-11 w-full rounded-lg bg-blue-700 px-3 py-2 text-white sm:w-auto"
+                      className="min-h-12 w-full rounded-xl bg-emerald-700 px-4 py-3 font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 sm:w-auto"
                     >
                       {selectingCaseId === item.id ? "Sending selection…" : "Select Anaesthetist"}
                     </button></div>
@@ -368,10 +397,11 @@ export function CasesDashboard({
                       }
                       className="min-h-12 w-full rounded-xl border border-red-300 bg-white px-4 py-2 font-semibold text-red-700 sm:w-auto"
                     >
-                      Decline assignment
+                      Cannot attend - reopen case
                     </button>
                   </div>
                 )}
+              {role === "anesthetist" && item.status === "assigned" && !item.caseStartedAt && item.assignedClinicianUserId === viewerUserId && <button className="mt-4 min-h-12 rounded-xl border border-red-300 px-4 py-2 font-semibold text-red-700" onClick={()=>confirm("Cannot attend? This case will reopen for fresh responses.")&&void act(`/api/cases/${item.id}/decline`,{method:"POST"},"Case reopened for fresh responses.")}>Cannot attend - reopen case</button>}
               {role === "anesthetist" &&
                 ["assigned", "completed"].includes(item.status) &&
                 item.assignedClinicianUserId === viewerUserId && (
@@ -414,13 +444,12 @@ export function CasesDashboard({
   );
 }
 
+function OverviewCard({label,value,icon,tone}:{label:string;value:number|null;icon:React.ReactNode;tone:"blue"|"amber"|"emerald"}) {
+  const colors={blue:"bg-blue-50 text-blue-800",amber:"bg-amber-50 text-amber-900",emerald:"bg-emerald-50 text-emerald-800"};
+  return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><span className={`inline-flex rounded-xl p-2 ${colors[tone]}`}>{icon}</span><span className="mt-3 block text-3xl font-bold tabular-nums">{value ?? "—"}</span><span className="mt-1 block text-sm font-semibold text-slate-700">{label}</span></div>;
+}
 function statusLabel(status: string) {
-  return status === "offered"
-    ? "Pending Acceptance"
-    : status === "assigned"
-      ? "Assigned"
-      : status === "completed"
-        ? "Completed"
-        : "Open";
+  const labels:Record<string,string>={open:"Awaiting Selection",offered:"Selected · Pending Acceptance",assigned:"Selected / Assigned",pending:"Awaiting Approval",completed:"Completed",cancelled:"Cancelled",replacement_required:"Replacement Required",replacement_searching:"Finding Replacement"};
+  return labels[status] ?? status.replaceAll("_"," ");
 }
 function responseTime(createdAt:string){const seconds=Math.max(0,Math.round((Date.now()-new Date(createdAt).getTime())/1000));if(seconds<60)return `${seconds}s ago`;const minutes=Math.floor(seconds/60);if(minutes<60)return `${minutes} min ago`;const hours=Math.floor(minutes/60);return `${hours} hr ago`;}

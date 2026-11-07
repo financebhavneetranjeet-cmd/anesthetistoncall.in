@@ -41,6 +41,7 @@ export function LoginForm({ signedInName, googleEnabled, googleMessage }: { sign
             window.location.assign(result.redirectTo);
           }}
         />
+        <Link href="/register/choose-role" className="flex min-h-12 w-full items-center justify-center rounded-xl border-2 border-blue-700 bg-blue-50 px-4 font-semibold text-blue-800 hover:bg-blue-100">New Registration</Link>
         <section className="space-y-3 rounded-2xl border-2 border-blue-600 bg-blue-50/60 p-4"><h3 className="text-xl font-semibold">Optional Google login</h3><p className="text-sm text-slate-600">Use your connected Google account for a quick and secure login.</p><GoogleButton role={role} enabled={googleEnabled} />{googleMessage && <p role="status" className="rounded-lg bg-white p-3 text-sm text-slate-700">{googleMessage}</p>}</section>
         <p className="text-center text-sm leading-5 text-slate-500">Hospital · Anaesthetist · Surgeon · Admin. Your role is assigned securely to your registered number.</p><p className="text-center text-sm"><a href="/signin-with-chatgpt?return_to=%2Fadmin" target="_top" className="font-semibold text-blue-700">Administrator recovery with ChatGPT</a></p></div>
     </div></section></main>;

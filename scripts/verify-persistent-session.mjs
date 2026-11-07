@@ -12,6 +12,7 @@ const jobs = [];
 const mail = [];
 let failDelivery = false;
 const env = { EMAIL_AUTH_SECRET: "isolated-test-secret-only-32-characters", EMAIL_FROM: "test@example.invalid", RESEND_API_KEY: "test-only", MSG91_AUTH_KEY: "test-only", ADMIN_MOBILES: "9876543210" };
+env.BUCKET = { put: async () => {}, delete: async () => {} };
 env.DB = {
   prepare(sql) {
     let values = [];
@@ -27,7 +28,7 @@ env.DB = {
 };
 globalThis.__emailTest = { env, jobs, jar: { get: key => cookies.has(key) ? { value: cookies.get(key) } : undefined, set: (key, value, options) => { assert.equal(options.httpOnly, true); assert.equal(options.secure, true); cookies.set(key, value); }, delete: key => cookies.delete(key) } };
 const bundle = await build({
-  stdin: { contents: `export * from './lib/server/session'; export {POST as hospital} from './app/api/hospitals/register/route'; export {POST as clinician} from './app/api/clinicians/register/route'; export {POST as mobileLogin} from './app/api/otp/widget/route'; export {POST as refresh, DELETE as logout} from './app/api/account/session/route'; export * from './lib/server/login';`, resolveDir: process.cwd(), loader: "ts" },
+  stdin: { contents: `export * from './lib/server/session'; export {POST as hospital} from './app/api/hospitals/register/route'; export {POST as clinician} from './app/api/clinicians/register/route'; export {POST as certificate} from './app/api/clinicians/documents/route'; export {POST as mobileLogin} from './app/api/otp/widget/route'; export {POST as refresh, DELETE as logout} from './app/api/account/session/route'; export * from './lib/server/login';`, resolveDir: process.cwd(), loader: "ts" },
   bundle: true, platform: "node", format: "esm", write: false,
   plugins: [{ name: "isolated-platform", setup(b) {
     b.onResolve({ filter: /^(cloudflare:workers|next\/headers|next\/server)$/ }, args => ({ path: args.path, namespace: "mock" }));
@@ -154,6 +155,49 @@ await test("new login replaces this browser's old session and database revocatio
   sqlite.exec("DELETE FROM sessions WHERE user_id='hospital'");
   assert.equal((await api.refresh(request())).status, 401);
   assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM sessions WHERE user_id='hospital'").get().n, 0);
+});
+await test("new hospital, anaesthetist and surgeon registrations remain pending", async () => {
+  const post = (data) => new Request("https://anesthetistoncall.in", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+  });
+  const seedChallenge = sqlite.prepare(
+    "INSERT INTO otp_challenges(id,mobile,purpose,status,expires_at) VALUES(?,?,'registration','verified',datetime('now','+5 minutes'))",
+  );
+  for (const [index, role] of ["hospital", "anesthetist", "surgeon"].entries()) {
+    const mobile = `900000001${index}`;
+    const challengeId = crypto.randomUUID();
+    const details = { challengeId, mobile, email: `${role}@example.invalid`, fullName: "Test Applicant", city: "Amritsar" };
+    if (role === "hospital") {
+      seedChallenge.run(challengeId, mobile);
+      const response = await api.hospital(post({
+        ...details, hospitalName: "Test Hospital", address: "Test Road, Amritsar, Punjab",
+        googlePlaceId: "pin-test", latitude: 31.63, longitude: 74.87,
+        googleMapsUri: "https://maps.google.com/?q=31.63,74.87",
+      }));
+      assert.equal(response.status, 201);
+      assert.equal((await response.json()).registration.status, "pending");
+    } else {
+      const doctor = { ...details, role, stateCouncil: "Punjab Medical Council",
+        registrationNumber: `TEST-${index}`, qualification: "MD", registrationYear: 2015 };
+      assert.equal((await api.clinician(post(doctor))).status, 409);
+      seedChallenge.run(challengeId, mobile);
+      assert.equal((await api.clinician(post({ ...doctor, registrationYear: 9999 }))).status, 400);
+      const response = await api.clinician(post(doctor));
+      assert.equal(response.status, 201);
+      assert.equal((await api.clinician(post(doctor))).status, 409);
+      const { clinician } = await response.json();
+      assert.equal(sqlite.prepare("SELECT registration_year FROM clinician_profiles WHERE id=?").get(clinician.id).registration_year, 2015);
+      const form = new FormData();
+      form.set("file", new File(["%PDF-1.7"], "test-certificate.pdf", { type: "application/pdf" }));
+      form.set("documentType", "pmc_certificate");
+      assert.equal((await api.certificate(new Request("https://anesthetistoncall.in", { method: "POST", body: form }))).status, 201);
+      assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM verification_documents WHERE user_id=? AND document_type='pmc_certificate'").get((await api.getSessionUser()).id).n, 1);
+    }
+    const applicant = await api.getSessionUser();
+    assert.equal(applicant.role, role);
+    assert.equal(applicant.status, "pending");
+    assert.equal(api.postLoginDestination(applicant), "/account/pending");
+  }
 });
 console.log(`${count} persistent-session integration groups passed (isolated SQLite; SMS provider and cookie store mocked).`);
 sqlite.close();

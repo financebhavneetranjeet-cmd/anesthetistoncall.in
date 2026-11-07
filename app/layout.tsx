@@ -4,6 +4,7 @@ import { PwaUpdate } from "@/components/pwa/pwa-update";
 import { NotificationPermission } from "@/components/pwa/notification-permission";
 import { SessionContinuity } from "@/components/auth/session-continuity";
 import "./globals.css";
+import { CompletionFeedbackNotice } from "@/components/cases/completion-feedback-notice";
 
 export const metadata: Metadata = {
   title: "Anesthetist on Call — Amritsar",
@@ -35,7 +36,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head><script src="/pwa-bootstrap.js" /></head>
-      <body className="min-w-0 overflow-x-hidden antialiased"><SessionContinuity />{children}<PwaInstall /><NotificationPermission /><PwaUpdate /></body>
+      <body className="min-w-0 overflow-x-hidden antialiased"><SessionContinuity /><CompletionFeedbackNotice />{children}<PwaInstall /><NotificationPermission /><PwaUpdate /></body>
     </html>
   );
 }

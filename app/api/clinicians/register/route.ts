@@ -7,7 +7,7 @@ import { jsonError, jsonOk } from "@/lib/server/http";
 import { createSession } from "@/lib/server/session";
 import { notifyAdminsOfRegistration } from "@/lib/server/web-push";
 
-const schema = z.object({ challengeId: z.string().uuid(), fullName: z.string().trim().min(2).max(100), mobile: mobileSchema, email: emailSchema, role: z.enum(["anesthetist", "surgeon"]), stateCouncil: z.string().trim().min(3).max(100), registrationNumber: z.string().trim().min(3).max(50), qualification: z.string().trim().min(2).max(120), city: z.literal("Amritsar") });
+const schema = z.object({ challengeId: z.string().uuid(), fullName: z.string().trim().min(2).max(100), mobile: mobileSchema, email: emailSchema, role: z.enum(["anesthetist", "surgeon"]), stateCouncil: z.string().trim().min(3).max(100), registrationNumber: z.string().trim().min(3).max(50), registrationYear: z.number().int().min(1900).max(new Date().getFullYear()), qualification: z.string().trim().min(2).max(120), city: z.literal("Amritsar") });
 
 export async function POST(request: Request) {
   if (!env.DB) return jsonError("Registration database is unavailable.", 503, "DB_UNAVAILABLE");
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   const userId = crypto.randomUUID(); const clinicianId = crypto.randomUUID();
   await env.DB.batch([
     env.DB.prepare("INSERT INTO users (id, mobile, email, full_name, role, status, medical_registration_number) VALUES (?, ?, ?, ?, ?, 'pending', ?)").bind(userId, data.mobile, data.email || null, data.fullName, data.role, data.registrationNumber),
-    env.DB.prepare("INSERT INTO clinician_profiles (id, user_id, state_council, registration_number, qualification, city, verification_status, availability_status) VALUES (?, ?, ?, ?, ?, 'Amritsar', 'pending', 'unavailable')").bind(clinicianId, userId, data.stateCouncil, data.registrationNumber, data.qualification),
+    env.DB.prepare("INSERT INTO clinician_profiles (id, user_id, state_council, registration_number, registration_year, qualification, city, verification_status, availability_status) VALUES (?, ?, ?, ?, ?, ?, 'Amritsar', 'pending', 'unavailable')").bind(clinicianId, userId, data.stateCouncil, data.registrationNumber, data.registrationYear, data.qualification),
     env.DB.prepare("UPDATE otp_challenges SET consumed_at = CURRENT_TIMESTAMP WHERE id = ?").bind(challenge.id),
   ]);
   console.info("Registration saved", { registrationId: clinicianId, role: data.role });

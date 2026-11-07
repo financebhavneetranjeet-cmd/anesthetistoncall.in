@@ -1,3 +1,5 @@
+import { CASE_DASHBOARD_WINDOW_SQL } from "@/lib/server/case-dashboard-window";
+import { requireCompletionFeedback } from "@/lib/server/completion-feedback";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import {
@@ -28,7 +30,7 @@ export async function GET() {
   await expandExpiredSearches();
   if (isVerifiedAnaesthetist(u)) {
     const cs = await env.DB.prepare(
-      `SELECT c.id,c.procedure_name AS procedureName,c.urgency,c.required_arrival_at AS requiredArrivalAt,c.offered_fee_paise AS offeredFeePaise,c.duration_minutes AS durationMinutes,c.status,c.sos_status AS sosStatus,c.sos_offer_version AS offerVersion,c.created_at AS createdAt,h.name AS hospitalName,h.address,r.response_type AS currentResponseType,r.proposed_fee_paise AS currentBidPaise,r.eta_minutes AS currentEtaMinutes FROM cases c JOIN hospitals h ON h.id=c.hospital_id LEFT JOIN case_responses r ON r.case_id=c.id AND r.clinician_user_id=? WHERE c.is_emergency=1 AND (c.status='open' OR c.assigned_clinician_user_id=?) ORDER BY c.created_at DESC`,
+      `SELECT c.id,c.procedure_name AS procedureName,c.urgency,c.required_arrival_at AS requiredArrivalAt,c.offered_fee_paise AS offeredFeePaise,c.duration_minutes AS durationMinutes,c.status,c.sos_status AS sosStatus,c.sos_offer_version AS offerVersion,c.created_at AS createdAt,h.name AS hospitalName,h.address,r.response_type AS currentResponseType,r.proposed_fee_paise AS currentBidPaise,r.eta_minutes AS currentEtaMinutes FROM cases c JOIN hospitals h ON h.id=c.hospital_id LEFT JOIN case_responses r ON r.case_id=c.id AND r.clinician_user_id=? WHERE ${CASE_DASHBOARD_WINDOW_SQL} AND c.is_emergency=1 AND (c.status='open' OR c.assigned_clinician_user_id=?) ORDER BY c.created_at DESC`,
     )
       .bind(u.id, u.id)
       .all();
@@ -46,7 +48,7 @@ export async function GET() {
     "SELECT id,name,address,latitude,longitude,google_place_id AS googlePlaceId FROM hospitals WHERE approval_status='approved' AND latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY name",
   ).all();
   const cs = await env.DB.prepare(
-    `SELECT c.id,c.procedure_name AS procedureName,c.urgency,c.required_arrival_at AS requiredArrivalAt,c.offered_fee_paise AS offeredFeePaise,c.duration_minutes AS durationMinutes,c.status,c.sos_status AS sosStatus,c.sos_offer_version AS offerVersion,c.sos_search_radius_km AS searchRadiusKm,c.created_at AS createdAt,h.name AS hospitalName FROM cases c JOIN hospitals h ON h.id=c.hospital_id WHERE c.is_emergency=1 AND (c.hospital_id=? OR c.posted_by_user_id=?) ORDER BY c.created_at DESC`,
+    `SELECT c.id,c.procedure_name AS procedureName,c.urgency,c.required_arrival_at AS requiredArrivalAt,c.offered_fee_paise AS offeredFeePaise,c.duration_minutes AS durationMinutes,c.status,c.sos_status AS sosStatus,c.sos_offer_version AS offerVersion,c.sos_search_radius_km AS searchRadiusKm,c.created_at AS createdAt,h.name AS hospitalName FROM cases c JOIN hospitals h ON h.id=c.hospital_id WHERE ${CASE_DASHBOARD_WINDOW_SQL} AND c.is_emergency=1 AND (c.hospital_id=? OR c.posted_by_user_id=?) ORDER BY c.created_at DESC`,
   )
     .bind(u.hospitalId, u.id)
     .all();
@@ -68,6 +70,7 @@ export async function POST(req: Request) {
       "Approved hospital or verified surgeon access required.",
       403,
     );
+  const feedbackRequired=await requireCompletionFeedback(u.id);if(feedbackRequired)return feedbackRequired;
   const p = schema.safeParse(await req.json().catch(() => null));
   if (!p.success)
     return jsonError(p.error.issues[0]?.message ?? "Invalid SOS details.");
@@ -116,7 +119,7 @@ export async function POST(req: Request) {
   await alertEligibleAnaesthetists(
     id,
     1,
-    `${h.name}: ${d.procedureName}. Arrival needed ${arrival.toLocaleString("en-IN")}. Offer ₹${d.offeredFeeRupees.toLocaleString("en-IN")}.`,
+    `${h.name}: ${d.procedureName}. Arrival needed ${arrival.toLocaleString("en-IN", { hour12: true })}. Offer ₹${d.offeredFeeRupees.toLocaleString("en-IN")}.`,
   );
   await auditCase(id, u.id, "sos_posted", {
     originalOfferedFeePaise: d.offeredFeeRupees * 100,

@@ -4,18 +4,19 @@ import Link from "@/components/native-link";
 import { useState } from "react";
 import { Building2, CheckCircle2, Loader2, MapPin, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { DashboardRole } from "@/lib/dashboard-roles";
 import { DashboardChoices } from "@/components/auth/dashboard-choices";
 
 // Core feature marker retained for the existing Hospital approvals regression check.
 
 export type PendingHospital = { id: string; name: string; facilityType: "hospital" | "diagnostic_center"; address: string; city: string; googlePlaceId: string | null; approvalStatus: string; createdAt: string; contactName: string; mobile: string; email: string | null };
 
-export function AdminHospitalList({ initialHospitals, adminName, dualDashboard }: { initialHospitals: PendingHospital[]; adminName: string; dualDashboard: boolean }) {
+export function AdminHospitalList({ initialHospitals, adminName, dualDashboard, dashboardRoles }: { initialHospitals: PendingHospital[]; adminName: string; dualDashboard: boolean; dashboardRoles?: DashboardRole[] }) {
   const [hospitals, setHospitals] = useState(initialHospitals); const [busyId, setBusyId] = useState<string | null>(null); const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   async function approve(id: string) { const selected=hospitals.find(item=>item.id===id); const label=selected?.facilityType==="diagnostic_center"?"Diagnostic center":"Hospital"; setBusyId(id); setError(null); setNotice(null); try { const response = await fetch(`/api/admin/hospitals/${id}/approve`, { method: "POST" }); const data = await response.json() as { error?: { message?: string }; smsStatus?: string }; if (!response.ok) throw new Error(data.error?.message ?? "Approval failed."); setNotice(data.smsStatus === "sent" ? `${label} approved. SMS accepted by MSG91 for delivery.` : data.smsStatus === "sending" ? `${label} approved. SMS is being sent; check the delivery log.` : `${label} approved. SMS was not sent. Check the delivery log to configure or retry it.`); setHospitals((items) => items.filter((item) => item.id !== id)); } catch (cause) { setError((cause as Error).message); } finally { setBusyId(null); } }
   return <main className="min-h-dvh bg-slate-50 px-3 py-5 text-slate-950 sm:p-8"><div className="mx-auto max-w-5xl"><header className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold text-blue-700">Admin panel</p><h1 className="font-serif text-2xl font-semibold sm:text-3xl">Medical facility approvals</h1><p className="mt-1 break-words text-sm text-slate-500">Signed in as {adminName}</p></div><div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto"><Button asChild className="w-full sm:w-auto"><Link href="/admin/control">Control centre</Link></Button><Button asChild className="w-full sm:w-auto"><Link href="/admin/clinicians">Clinician approvals</Link></Button><Button asChild variant="outline" className="col-span-2 w-full sm:w-auto"><Link href="/">Back to site</Link></Button></div></header>
-    {dualDashboard && <div className="mt-5"><DashboardChoices roles={["anesthetist", "admin"]} currentRole="admin" /></div>}
+    {(dashboardRoles ? dashboardRoles.length > 1 || dashboardRoles.includes("admin") : dualDashboard) && <div className="mt-5"><DashboardChoices roles={dashboardRoles ?? ["anesthetist", "admin"]} currentRole="admin" /></div>}
     <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-8 sm:p-7"><div className="grid gap-3 sm:flex sm:items-center sm:justify-between"><div><h2 className="text-xl font-semibold">Pending verification</h2><p className="mt-1 text-sm text-slate-500">Confirm facility type, identity, and Google Maps listing before approval.</p></div><span className="w-fit rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800">{hospitals.length} pending</span></div>
       {notice && <p role="status" className="mt-5 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">{notice} <Link href="/admin/control" className="underline">Delivery log</Link></p>}
       {error && <p className="mt-5 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}

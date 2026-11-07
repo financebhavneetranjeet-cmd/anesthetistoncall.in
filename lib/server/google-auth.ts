@@ -107,7 +107,7 @@ export async function finishGoogle(request: Request) {
     if (!user || !loginAllowed(user, linked.mobile) || !["pending", "verified"].includes(user.status)) return fail("restricted");
     const accounts = await dashboardAccounts({ mobile: linked.mobile, role: user.role });
     await createSession(user.id);
-    return redirect(request, accounts.admin && accounts.anesthetist ? "/choose-dashboard" : postLoginDestination(user));
+    return redirect(request, Object.keys(accounts).length > 1 ? "/choose-dashboard" : postLoginDestination(user));
   } catch {
     // Do not log codes, ID/access tokens, email addresses, or provider responses.
     return fail();

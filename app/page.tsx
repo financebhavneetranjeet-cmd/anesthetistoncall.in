@@ -10,7 +10,7 @@ export default async function Page() {
   const [chatgptUser, account, emergencyAvailability, publicCases] = await Promise.all([
     getChatGPTUser(),
     getSessionUser(),
-    getEmergencyAvailableAnaesthetists({ includeRanking: false }).catch(() => []),
+    getEmergencyAvailableAnaesthetists({ includeRanking: false }).catch(() => null),
     getPublicCases().catch(() => null),
   ]);
 
@@ -18,7 +18,7 @@ export default async function Page() {
     <HomePage
       account={account ? { fullName: account.fullName, role: account.role, verified: isVerifiedPlatformUser(account) } : null}
       chatgptName={chatgptUser?.displayName ?? null}
-      initialAvailabilityCount={emergencyAvailability.length}
+      initialAvailabilityCount={emergencyAvailability?.length ?? null}
       publicCases={publicCases}
     />
   );

@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       const accounts = await dashboardAccounts({ mobile, role: user.role });
       await createSession(user.id);
       if (googleConfigured() && !await googleLinked(mobile)) return jsonOk({ redirectTo: "/account/google" });
-      return jsonOk({ redirectTo: accounts.admin && accounts.anesthetist ? "/choose-dashboard" : postLoginDestination(user) });
+      return jsonOk({ redirectTo: Object.keys(accounts).length > 1 ? "/choose-dashboard" : postLoginDestination(user) });
     }
     return jsonOk({ challengeId: id, mobile, registrationRequired: purpose === "login", redirectTo: purpose === "login" ? "/register/choose-role" : undefined });
   } catch (error) {

@@ -1,4 +1,5 @@
 "use client";
+import { DeleteCompletedCaseButton } from "../delete-completed-case-button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "@/components/native-link";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,6 +40,7 @@ type Case = {
   hospitalName: string;
   status: string;
   urgency: string;
+  canDelete: number;
   scheduledAt: string;
 };
 type Delivery = {
@@ -77,8 +79,9 @@ export function AdminControlCentre() {
   const [caseStatus, setCaseStatus] = useState("all");
   const [tab, setTab] = useState("users");
   const [msg, setMsg] = useState("");
-  const [accessAction, setAccessAction] = useState<{ user: User; action: "suspend" | "block" | "restore" } | null>(null);
+  const [accessAction, setAccessAction] = useState<{ user: User; action: "suspend" | "block" | "restore" | "delete" } | null>(null);
   const [reason, setReason] = useState("");
+  const [accessBusy, setAccessBusy] = useState(false);
   const [suspensionHours, setSuspensionHours] = useState("24");
   const load = useCallback(async () => {
     const p = new URLSearchParams({ q, role: tab === "suspended" ? "all" : userRole, verificationStatus: tab === "suspended" ? "all" : verificationStatus, accountStatus: tab === "suspended" ? "suspended" : accountStatus, caseStatus });
@@ -109,12 +112,19 @@ export function AdminControlCentre() {
     const j = (await r.json()) as { error?: { message?: string } };
     setMsg(r.ok ? "Action completed." : (j.error?.message ?? "Action failed."));
     if (r.ok) void load();
+    return r.ok;
   }
   async function confirmAccessAction() {
+    if (accessBusy) return;
     if (!accessAction || reason.trim().length < 3) { setMsg("Enter a clear reason before confirming."); return; }
     const suspensionExpiresAt = accessAction.action === "suspend" ? new Date(Date.now() + Number(suspensionHours) * 60 * 60 * 1000).toISOString() : undefined;
-    await action(`/api/admin/users/${accessAction.user.id}/status`, { action: accessAction.action, reason: reason.trim(), suspensionExpiresAt });
-    setAccessAction(null); setReason("");
+    setAccessBusy(true);
+    setMsg("");
+    try {
+      const succeeded = await action(`/api/admin/users/${accessAction.user.id}/status`, { action: accessAction.action, reason: reason.trim(), suspensionExpiresAt });
+      if (succeeded) { setAccessAction(null); setReason(""); }
+    } catch { setMsg("Unable to connect. Please try again."); }
+    finally { setAccessBusy(false); }
   }
   const visibleUsers = data ? data.users.filter((user) => tab === "suspended" ? user.accountStatus === "suspended" : user.role === userRole) : [];
   return (
@@ -132,6 +142,7 @@ export function AdminControlCentre() {
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
             <Link href="/admin/performance" className="grid min-h-11 place-items-center rounded-xl border bg-white px-3 py-2 text-center sm:px-4">Ranking controls</Link>
             <Link href="/admin/reviews" className="grid min-h-11 place-items-center rounded-xl border bg-white px-3 py-2 text-center sm:px-4">Review moderation</Link>
+            <Link href="/admin/case-history" className="grid min-h-11 place-items-center rounded-xl border bg-white px-3 py-2 text-center font-semibold">Case history</Link>
             <Link href="/admin/incidents" className="grid min-h-11 place-items-center rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-center font-semibold text-red-800 sm:px-4">Cancellation & no-show review</Link>
             <Link href="/admin/safety" className="grid min-h-11 place-items-center rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center font-semibold text-red-900 sm:px-4">Clinical safety governance</Link>
             <Link
@@ -257,13 +268,15 @@ export function AdminControlCentre() {
                 >
                   <div className="min-w-0">
                     <b className="break-words">{u.fullName}</b>
+                    {u.role === "hospital" && <p className="mt-1 break-words text-sm font-semibold text-slate-700">({u.hospitalName?.trim() || "Hospital name not provided"})</p>}
                     <p className="break-words text-sm text-slate-500">
                       {u.role} · {u.mobile} · {u.email ?? "No email"}
                     </p>
-                    <p className="mt-1 text-sm"><StatusBadge value={u.accountStatus} /><span className="ml-2 text-slate-500">Verification: {u.verificationStatus}</span>{u.accountStatus === "suspended" && u.suspendedUntil ? <span className="ml-2 text-amber-700">Until {new Date(u.suspendedUntil).toLocaleString("en-IN")}</span> : null}</p>
+                    <p className="mt-1 text-sm"><StatusBadge value={u.accountStatus} /><span className="ml-2 text-slate-500">Verification: {u.verificationStatus}</span>{u.accountStatus === "suspended" && u.suspendedUntil ? <span className="ml-2 text-amber-700">Until {new Date(u.suspendedUntil).toLocaleString("en-IN", { hour12: true })}</span> : null}</p>
                   </div>
                   {u.role !== "admin" && <div className="grid grid-cols-2 gap-2 sm:flex">
                     {u.accountStatus === "active" ? <><button onClick={() => setAccessAction({ user: u, action: "suspend" })} className="min-h-11 rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800">Suspend</button><button onClick={() => setAccessAction({ user: u, action: "block" })} className="min-h-11 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white">Block</button></> : <button onClick={() => setAccessAction({ user: u, action: "restore" })} className="col-span-2 min-h-11 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Restore / Reactivate</button>}
+                    <button onClick={() => { setReason(""); setAccessAction({ user: u, action: "delete" }); }} className="min-h-11 rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-700">Delete account</button>
                   </div>}
                 </article>
               ))}
@@ -284,6 +297,7 @@ export function AdminControlCentre() {
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:flex">
+                    {Boolean(c.canDelete) && <DeleteCompletedCaseButton caseId={c.id} procedure={c.procedureName} onDeleted={() => void load()} />}
                     {c.status === "pending_approval" && (
                       <button
                         onClick={() =>
@@ -352,15 +366,15 @@ export function AdminControlCentre() {
                   <b className="break-words">{a.action.replaceAll("_", " ")}</b>
                   <p className="break-words text-sm text-slate-500">
                     {a.actorEmail} · {a.targetType} ·{" "}
-                    {new Date(a.createdAt).toLocaleString("en-IN")}
+                    {new Date(a.createdAt).toLocaleString("en-IN", { hour12: true })}
                   </p>
                 </article>
               ))}
             </div>
-          ) : <div>{data.accessAudit.map((a) => <article key={a.id} className="border-b p-4 last:border-0"><div className="flex flex-wrap items-center gap-2"><b>{a.userName}</b><StatusBadge value={a.newStatus} /></div><p className="mt-1 text-sm text-slate-600">{a.previousStatus} → {a.newStatus} · {a.action}</p><p className="mt-1 text-sm">Reason: {a.reason}</p>{a.suspensionExpiresAt ? <p className="mt-1 text-sm text-amber-700">Suspension expires: {new Date(a.suspensionExpiresAt).toLocaleString("en-IN")}</p> : null}<p className="mt-1 break-words text-xs text-slate-500">{a.adminActor} · {new Date(a.createdAt).toLocaleString("en-IN")}</p></article>)}</div>}
+          ) : <div>{data.accessAudit.map((a) => <article key={a.id} className="border-b p-4 last:border-0"><div className="flex flex-wrap items-center gap-2"><b>{a.userName}</b><StatusBadge value={a.newStatus} /></div><p className="mt-1 text-sm text-slate-600">{a.previousStatus} → {a.newStatus} · {a.action}</p><p className="mt-1 text-sm">Reason: {a.reason}</p>{a.suspensionExpiresAt ? <p className="mt-1 text-sm text-amber-700">Suspension expires: {new Date(a.suspensionExpiresAt).toLocaleString("en-IN", { hour12: true })}</p> : null}<p className="mt-1 break-words text-xs text-slate-500">{a.adminActor} · {new Date(a.createdAt).toLocaleString("en-IN", { hour12: true })}</p></article>)}</div>}
         </section>
       </div>
-      {accessAction && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" role="dialog" aria-modal="true" aria-labelledby="access-action-title"><section className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><h2 id="access-action-title" className="text-xl font-bold capitalize">{accessAction.action} {accessAction.user.fullName}?</h2><p className="mt-2 text-sm leading-6 text-slate-600">This immediately restricts protected platform access. Existing clinical, case, payment, rating and incident records will be retained.</p>{accessAction.action === "suspend" ? <label className="mt-5 block text-sm font-semibold">Suspension period<select value={suspensionHours} onChange={(e) => setSuspensionHours(e.target.value)} className="mt-2 w-full rounded-xl border p-3 font-normal"><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option><option value="720">30 days</option></select></label> : null}<label className="mt-5 block text-sm font-semibold">Reason<textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={4} placeholder="Enter the reason for this action" className="mt-2 w-full rounded-xl border p-3 font-normal outline-none focus:border-blue-600" /></label><div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => { setAccessAction(null); setReason(""); }} className="min-h-12 rounded-xl border font-semibold">Cancel</button><button onClick={() => void confirmAccessAction()} disabled={reason.trim().length < 3} className="min-h-12 rounded-xl bg-slate-900 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Confirm {accessAction.action}</button></div></section></div>}
+      {accessAction && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" role="dialog" aria-modal="true" aria-labelledby="access-action-title"><section className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><h2 id="access-action-title" className="text-xl font-bold capitalize">{accessAction.action} {accessAction.user.fullName}?</h2>{accessAction.user.role === "hospital" && <p className="mt-1 break-words font-semibold text-slate-700">({accessAction.user.hospitalName?.trim() || "Hospital name not provided"})</p>}<p className="mt-2 break-words text-sm text-slate-600">Mobile: {accessAction.user.mobile}</p><p className="mt-2 text-sm leading-6 text-slate-600">{accessAction.action === "delete" ? "This account will be removed from the user list and signed out on every device. It cannot be reactivated using Restore. Existing clinical, case, payment, rating and incident records will be retained." : "This changes protected platform access. Existing clinical, case, payment, rating and incident records will be retained."}</p>{accessAction.action === "suspend" ? <label className="mt-5 block text-sm font-semibold">Suspension period<select value={suspensionHours} onChange={(e) => setSuspensionHours(e.target.value)} className="mt-2 w-full rounded-xl border p-3 font-normal"><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option><option value="720">30 days</option></select></label> : null}<label className="mt-5 block text-sm font-semibold">Reason<textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={4} placeholder="Enter the reason for this action" className="mt-2 w-full rounded-xl border p-3 font-normal outline-none focus:border-blue-600" /></label>{msg && <p role="alert" className="mt-3 text-sm text-red-700">{msg}</p>}<div className="mt-5 grid grid-cols-2 gap-3"><button disabled={accessBusy} onClick={() => { setAccessAction(null); setReason(""); }} className="min-h-12 rounded-xl border font-semibold">Cancel</button><button onClick={() => void confirmAccessAction()} disabled={accessBusy || reason.trim().length < 3} className="min-h-12 rounded-xl bg-slate-900 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Confirm {accessAction.action}</button></div></section></div>}
     </main>
   );
 }

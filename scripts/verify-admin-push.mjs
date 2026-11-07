@@ -32,7 +32,7 @@ const exports={};
 vm.runInNewContext(transpileModule(fs.readFileSync('lib/server/web-push.ts','utf8'),{compilerOptions:{module:ModuleKind.CommonJS}}).outputText,{ exports,crypto:webcrypto,console,
  require(name) { if(name==='cloudflare:workers') return {env:{DB:adapter,WEB_PUSH_PUBLIC_KEY:'test',WEB_PUSH_PRIVATE_KEY:'test'}};
  if(name==='web-push')return {default:{setVapidDetails(){},async sendNotification(...args){calls.push(args);}}};
- if(name==='./login')return {isAdminMobile:mobile=>mobile==='allowed'};throw Error(name); }
+ if(name==='./login')return {isAdminMobile:mobile=>mobile==='allowed'};if(name==='./replacement-recipients')return {replacementRecipients:async()=>[]};throw Error(name); }
 });
 db.exec("INSERT INTO push_subscriptions VALUES('device','admin','https://example.test','key','auth')");
 const payload={title:'New case',body:'Test case',url:'/admin',tag:'event'};

@@ -15,5 +15,7 @@ assert.match(documents,/private, no-store/,"Private document response");
 assert.match(documents,/isAdmin/,"Admin-only document access");
 assert.match(approval,/mode === "failed" \|\| mode === "unavailable"/,"Test F");
 assert.match(approval,/mode === "manual" && clinician\.pmcCount < 1/,"Manual certificate guard");
-assert.match(registration,/PMC Certificate \(Optional\)/,"Optional registration upload");
+assert.match(registration,/Medical registration certificate \(required\)/,"Required registration upload");
+assert.match(approval,/clinician.registrationYear !== null && clinician.pmcCount < 1/);
+assert.match(admin,/Confirm official record match and approve/);
 console.log("PMC Tests A-F passed.");

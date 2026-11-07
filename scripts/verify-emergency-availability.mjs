@@ -38,9 +38,12 @@ for (const prohibited of ["name", "phone", "mobile", "email", "clinicianid", "us
 const route = readFileSync(new URL("../app/api/emergency-availability/route.ts", import.meta.url), "utf8");
 const home = readFileSync(new URL("../components/home/home-page.tsx", import.meta.url), "utf8");
 assert.match(route, /isVerifiedPlatformUser/);
-assert.match(home, /anaesthetists\.length/);
-assert.match(home, /EmergencyAvailabilityMap/);
-console.log("Emergency availability eligibility, expiry, privacy DTO, authorization, count/list/map population checks passed.");
+assert.match(home, /href="\/availability"/);
+assert.doesNotMatch(home, /EmergencyAvailabilityDialog|No published rating yet/);
+const availabilityPage=readFileSync('app/availability/page.tsx','utf8');
+assert.match(availabilityPage, /isApprovedHospital\(user\)/);
+assert.match(availabilityPage, /AvailableClinicians/);
+console.log("Emergency availability eligibility, expiry, privacy DTO, authorization and dedicated availability tab passed.");
 
 db.prepare("INSERT INTO availability_slots VALUES(?,?,?,?,?)").run("overlap", "eligible", "available", expired, future);
 assert.equal(rows().length, 1, "overlapping slots count once");

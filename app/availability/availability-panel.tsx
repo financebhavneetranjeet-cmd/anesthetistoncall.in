@@ -1,4 +1,5 @@
 "use client";
+import { TimeField } from "@/components/time-field";
 
 import Link from "@/components/native-link";
 import { useCallback, useEffect, useState } from "react";
@@ -114,7 +115,7 @@ export function AvailabilityPanel() {
           {loading ? <p className="mt-5 flex items-center gap-2 text-sm text-slate-600"><Loader2 className="size-4 animate-spin" />Loading current status…</p> : current?.status === "available" && current.availableUntil ? <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><strong className="block">Currently available · Notifications ON</strong><span>Until {new Date(current.availableUntil).toLocaleString()}{current.locationShared ? " · Approximate location shared" : ""}</span></div> : <p className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">Currently unavailable · New case notifications OFF</p>}
           <div className="mt-7 grid gap-2">
             <Label>Available until</Label>
-            <Input type="datetime-local" value={until} onChange={(event) => setUntil(event.target.value)} />
+            <TimeField type="datetime-local" value={until} onChange={(event) => setUntil(event.target.value)} />
             <Label className="mt-2">Preferred emergency fee (optional)</Label>
             <Input type="number" min="1" placeholder="₹" value={fee} onChange={(event) => setFee(event.target.value)} />
           </div>

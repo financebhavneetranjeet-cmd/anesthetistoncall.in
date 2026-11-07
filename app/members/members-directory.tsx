@@ -6,7 +6,7 @@ import { ArrowLeft, Clock3, Loader2, ShieldCheck, Stethoscope } from "lucide-rea
 
 type MemberRole = "hospital" | "surgeon" | "anesthetist";
 type MemberType = "hospital" | "diagnostic_center" | "surgeon" | "anesthetist";
-type Member = { id: string; fullName: string; role: MemberRole; memberType: MemberType; qualification: string; city: string; availabilityStatus: string; availableUntil: string | null };
+type Member = { id: string; fullName: string; role: MemberRole; memberType: MemberType; qualification: string; city: string; availabilityStatus: string; availableUntil: string | null; registrationNumber: string | null; stateCouncil: string | null; nmcRecordMatched: number };
 const groups: { memberType: MemberType; title: string }[] = [
   { memberType: "hospital", title: "Hospitals" },
   { memberType: "diagnostic_center", title: "Diagnostic Centers" },
@@ -20,6 +20,10 @@ function MemberCard({ member }: { member: Member }) {
       <div className="min-w-0">
         <h3 className="break-words text-lg font-semibold">{member.fullName}</h3>
         <p className="break-words text-sm capitalize text-slate-500">{member.memberType.replaceAll("_", " ")} • {member.qualification}</p>
+        {(member.role === "anesthetist" || member.role === "surgeon") && <p className="mt-2 break-words text-sm text-slate-800">
+          <b>{member.stateCouncil === "Punjab Medical Council" ? "PMC No." : member.stateCouncil ?? "Medical registration"}</b> {member.registrationNumber || "Not provided"}
+          {Boolean(member.nmcRecordMatched) && <span className="mt-1 block font-semibold text-emerald-800">Verified against NMC records by Admin</span>}
+        </p>}
         {member.city && <p className="mt-1 text-sm text-slate-500">{member.city}</p>}
       </div>
       <ShieldCheck aria-label="Verified" className="size-5 shrink-0 text-emerald-600" />

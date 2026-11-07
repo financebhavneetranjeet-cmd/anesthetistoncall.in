@@ -153,10 +153,12 @@ export function PwaInstall() {
   }
 
   return <>
-    <button type="button" onClick={() => void install()} disabled={installing} className="fixed right-3 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#0b3159] px-4 py-2 text-sm font-bold text-white shadow-lg ring-1 ring-white/30 disabled:opacity-60" aria-haspopup={ios ? "dialog" : undefined}>
+    <div className="flex flex-col items-end gap-3 bg-slate-50 px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+    <button type="button" onClick={() => void install()} disabled={installing} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#0b3159] px-4 py-2 text-sm font-bold text-white shadow-lg ring-1 ring-white/30 disabled:opacity-60" aria-haspopup={ios ? "dialog" : undefined}>
       <Download className="size-4" aria-hidden="true" /> {installing ? "Opening…" : "Install App"}
     </button>
-    {!ios && fallback && <p role="status" aria-live="polite" className="fixed right-3 bottom-[calc(9rem+env(safe-area-inset-bottom))] z-50 max-w-xs rounded-lg bg-white p-3 text-sm text-slate-700 shadow-lg">{fallback}</p>}
+    {!ios && fallback && <p role="status" aria-live="polite" className="max-w-xs rounded-lg bg-white p-3 text-sm text-slate-700 shadow-lg">{fallback}</p>}
+    </div>
     {ios && open && <div className="fixed inset-0 z-[70] grid place-items-end bg-slate-950/50 p-3 sm:place-items-center" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="install-title" className="w-full max-w-md rounded-2xl bg-white p-5 text-slate-950 shadow-2xl">
         <div className="flex items-start justify-between gap-4"><div><h2 id="install-title" className="text-xl font-bold">Install Anesthetist on Call</h2><p className="mt-1 text-sm leading-6 text-slate-600">{ios ? "On iPhone or iPad, use Safari’s Add to Home Screen option." : prompt ? "Install the app on your home screen." : "Installation is not available directly in this browser right now."}</p></div><button type="button" onClick={() => setOpen(false)} className="grid size-11 shrink-0 place-items-center rounded-full hover:bg-slate-100" aria-label="Close install instructions"><X className="size-5" /></button></div>

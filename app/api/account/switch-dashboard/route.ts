@@ -1,5 +1,6 @@
 import { getSessionUser, switchSessionUser } from "@/lib/server/session";
 import { dashboardAccounts, type DashboardRole } from "@/lib/server/dashboard-access";
+import { DASHBOARD_ROLES } from "@/lib/dashboard-roles";
 import { jsonError, jsonOk } from "@/lib/server/http";
 
 export async function POST(request: Request) {
@@ -8,7 +9,7 @@ export async function POST(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin || origin !== new URL(request.url).origin) return jsonError("Invalid request origin.", 403, "INVALID_ORIGIN");
   const body = await request.json().catch(() => null) as { role?: DashboardRole } | null;
-  if (body?.role !== "admin" && body?.role !== "anesthetist") return jsonError("Invalid dashboard.");
+  if (!body?.role || !DASHBOARD_ROLES.includes(body.role)) return jsonError("Invalid dashboard.");
   const accounts = await dashboardAccounts(user);
   const targetId = accounts[body.role];
   if (!targetId) return jsonError("You do not have access to this dashboard.", 403, "DASHBOARD_FORBIDDEN");
