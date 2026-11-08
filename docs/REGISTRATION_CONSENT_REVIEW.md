@@ -26,3 +26,10 @@ Platform initially free. Doctors are paid directly by hospitals; no case commiss
 
 ## Release gate
 No production deploy or DB modification from this branch until owner approves reconciled release and legal review is completed.
+
+## Follow-up audit, 9 Nov 2026
+- Confirmed GitHub main commit for this review starts at `a34a7b3499c71c73d66ab6b270290858f1c062eb`, previously known to lag published Sites version.
+- GitHub main does **not** contain `app/terms/page.tsx` or `app/privacy/page.tsx`. Links in the review-only component are placeholders and must not be exposed to production users until complete reviewed policies exist.
+- Inspected registration API code: consent is not required server-side or saved with registrations. Releasing only the UI would not meet the requirement.
+- The active assistant integration does not expose ChatGPT Sites project read/sync/publish operations. No production access, source reconciliation, build/test, deployment or database migration has occurred.
+- **Release blocked:** obtain an authoritative current Sites project export; reconcile all relevant files; implement and test consent storage/server enforcement, real policy pages, role-specific agreements and any signing integration. Publish only from current production-derived code with rollback and backup.
