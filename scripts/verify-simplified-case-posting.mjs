@@ -138,5 +138,32 @@ for (const update of ["status='closed'", "sos_offer_version=sos_offer_version+1"
 beforeRun = () => {};
 console.log('SOS responses, ETA, notification deduplication, permissions, expiry and concurrent case changes passed on migrated SQLite.');
 
+
+modules['@/lib/fee-breakdown.mjs'] = {};
+modules['@/lib/server/emergency-availability-service'] = { getCurrentAnaesthetistAvailability: async () => ({ availableUntil: arrival }) };
+modules['@/lib/server/performance'] = {};
+modules['@/lib/server/google-routes'] = {};
+const caseBids = load('app/api/cases/[id]/bids/route.ts');
+function bidThroughCases() {
+  const request = new Request('https://example.test/api/cases/sos-test/bids', { method: 'POST', body: JSON.stringify({ proposedFeeRupees: 1200 }) });
+  return caseBids.POST(request, { params: Promise.resolve({ id: sosId }) });
+}
+db.prepare("UPDATE cases SET required_arrival_at=datetime('now','-1 minute') WHERE id=?").run(sosId);
+assert.equal((await bidThroughCases()).status, 409);
+db.prepare("UPDATE cases SET required_arrival_at=? WHERE id=?").run(arrival, sosId);
+
+beforeRun = (sql) => {
+  if (sql.startsWith('INSERT INTO case_responses')) {
+    db.prepare("UPDATE cases SET status='closed' WHERE id=?").run(sosId);
+  }
+};
+assert.equal((await bidThroughCases()).status, 409);
+assert.equal(responseRow.get(sosId, doctor.id).response_type, 'decline');
+beforeRun = () => {};
+db.prepare("UPDATE cases SET status='open' WHERE id=?").run(sosId);
+assert.equal((await bidThroughCases()).status, 201);
+assert.equal(responseRow.get(sosId, doctor.id).status, 'available');
+console.log('General case bid route rejects expired or concurrently closed SOS cases and accepts an active case.');
+
 db.close();
 console.log('Hospital standard/advance and Surgeon advance posting pass without removed fields; legacy details remain readable; fee validation preserved.');
