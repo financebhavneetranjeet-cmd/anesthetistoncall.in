@@ -75,8 +75,8 @@ db.prepare("UPDATE hospitals SET latitude='31.63', longitude='74.87' WHERE id=?"
 const doctor = { id: 'doctor', fullName: 'Test Anaesthetist', role: 'anesthetist', status: 'verified', accountStatus: 'active', clinicianId: 'profile', clinicianVerificationStatus: 'verified' };
 const sosId = 'sos-test';
 const arrival = new Date(Date.now() + 3_600_000).toISOString();
-db.prepare(`INSERT INTO cases(id,hospital_id,posted_by_user_id,procedure_name,anaesthesia_type,scheduled_at,required_arrival_at,offered_fee_paise,is_emergency,status,sos_status)
-  VALUES(?,?,'hospital','Test SOS','Not specified',?,?,500000,1,'open','searching')`).run(sosId, hospitalId, arrival, arrival);
+db.prepare(`INSERT INTO cases(id,hospital_id,posted_by_user_id,procedure_name,anaesthesia_type,scheduled_at,required_arrival_at,offered_fee_paise,is_emergency,bidding_enabled,status,sos_status)
+  VALUES(?,?,'hospital','Test SOS','Not specified',?,?,500000,1,1,'open','searching')`).run(sosId, hospitalId, arrival, arrival);
 
 function respond(body) {
   const request = new Request('https://example.test/api/emergency/sos-test/respond', { method: 'POST', body: JSON.stringify(body) });
