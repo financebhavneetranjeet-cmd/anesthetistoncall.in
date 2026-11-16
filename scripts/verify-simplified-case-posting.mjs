@@ -177,6 +177,7 @@ assert.equal(responseRow.get(sosId, doctor.id).status, 'available');
 console.log('General case bid route rejects expired or concurrently closed SOS cases and accepts an active case.');
 
 
+const countBeforeCaseRetry = db.prepare('SELECT COUNT(*) AS n FROM cases').get().n;
 const existingCase = db.prepare("SELECT id FROM cases WHERE hospital_id=? AND posted_by_user_id='hospital' AND is_planned=0").get(hospitalId);
 assert.ok(existingCase);
 db.prepare("DELETE FROM case_private_details WHERE case_id=?").run(existingCase.id);
@@ -195,7 +196,7 @@ assert.equal(db.prepare("SELECT COUNT(*) AS n FROM case_private_details WHERE ca
 user = owner;
 assert.equal((await retryCase()).status, 201);
 assert.equal(db.prepare("SELECT patient_initials FROM case_private_details WHERE case_id=?").get(existingCase.id).patient_initials, 'QA');
-assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cases').get().n, 6);
+assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cases').get().n, countBeforeCaseRetry);
 console.log('Case request ID replay is restricted to the original hospital account.');
 
 
