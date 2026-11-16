@@ -47,6 +47,8 @@ export async function GET(
   const map=canViewResponderMap&&Number.isFinite(hospitalLatitude)&&Number.isFinite(hospitalLongitude)?{hospital:{name:owns.hospitalName,latitude:hospitalLatitude,longitude:hospitalLongitude}}:null;
   return jsonOk({bids,map});
 }
+const acceptingBids = `c.id=? AND c.status='open' AND (c.is_emergency=0 OR (c.sos_status='searching' AND (c.required_arrival_at IS NULL OR julianday(c.required_arrival_at)>julianday('now'))))`;
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -62,7 +64,7 @@ export async function POST(
     return jsonError(parsed.error.issues[0]?.message ?? "Invalid bid.");
   const { id } = await params;
   const open = await env.DB.prepare(
-    "SELECT c.id,c.hospital_id AS hospitalId,c.bidding_enabled AS biddingEnabled,c.offered_fee_paise AS offeredFeePaise,h.latitude AS hospitalLatitude,h.longitude AS hospitalLongitude FROM cases c JOIN hospitals h ON h.id=c.hospital_id WHERE c.id = ? AND c.status = 'open'",
+    `SELECT c.id,c.hospital_id AS hospitalId,c.bidding_enabled AS biddingEnabled,c.offered_fee_paise AS offeredFeePaise,h.latitude AS hospitalLatitude,h.longitude AS hospitalLongitude FROM cases c JOIN hospitals h ON h.id=c.hospital_id WHERE ${acceptingBids}`,
   )
     .bind(id)
     .first<{ id: string; hospitalId: string; biddingEnabled: number; offeredFeePaise: number; hospitalLatitude:string|null; hospitalLongitude:string|null }>();
@@ -82,8 +84,8 @@ export async function POST(
     const route=await getTrafficRoute(origin,destination).catch(()=>null);
     if(route){distanceMetres=route.distanceMetres||distanceMetres;etaMinutes=Math.max(1,Math.round(route.durationSeconds/60));}
   }
-  await env.DB.prepare(
-    "INSERT INTO case_responses (id, case_id, clinician_user_id, proposed_fee_paise, message, status, distance_metres, eta_minutes, response_latitude, response_longitude, location_captured_at) VALUES (?, ?, ?, ?, ?, 'available', ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END) ON CONFLICT(case_id, clinician_user_id) DO UPDATE SET proposed_fee_paise = COALESCE(excluded.proposed_fee_paise, case_responses.proposed_fee_paise), message = excluded.message, response_type = CASE WHEN excluded.proposed_fee_paise IS NOT NULL THEN NULL ELSE case_responses.response_type END, status = 'available', distance_metres=COALESCE(excluded.distance_metres,case_responses.distance_metres),eta_minutes=COALESCE(excluded.eta_minutes,case_responses.eta_minutes),response_latitude=COALESCE(excluded.response_latitude,case_responses.response_latitude),response_longitude=COALESCE(excluded.response_longitude,case_responses.response_longitude),location_captured_at=COALESCE(excluded.location_captured_at,case_responses.location_captured_at),updated_at = CURRENT_TIMESTAMP",
+  const saved = await env.DB.prepare(
+    `INSERT INTO case_responses (id, case_id, clinician_user_id, proposed_fee_paise, message, status, distance_metres, eta_minutes, response_latitude, response_longitude, location_captured_at) SELECT ?, ?, ?, ?, ?, 'available', ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END FROM cases c WHERE ${acceptingBids} ON CONFLICT(case_id, clinician_user_id) DO UPDATE SET proposed_fee_paise = COALESCE(excluded.proposed_fee_paise, case_responses.proposed_fee_paise), message = excluded.message, response_type = CASE WHEN excluded.proposed_fee_paise IS NOT NULL THEN NULL ELSE case_responses.response_type END, status = 'available', distance_metres=COALESCE(excluded.distance_metres,case_responses.distance_metres),eta_minutes=COALESCE(excluded.eta_minutes,case_responses.eta_minutes),response_latitude=COALESCE(excluded.response_latitude,case_responses.response_latitude),response_longitude=COALESCE(excluded.response_longitude,case_responses.response_longitude),location_captured_at=COALESCE(excluded.location_captured_at,case_responses.location_captured_at),updated_at = CURRENT_TIMESTAMP`,
   )
     .bind(
       crypto.randomUUID(),
@@ -98,8 +100,10 @@ export async function POST(
       hasLocation?String(parsed.data.latitude):null,
       hasLocation?String(parsed.data.longitude):null,
       hasLocation?String(parsed.data.latitude):null,
+      id,
     )
     .run();
+  if (!saved.meta.changes) return jsonError("This case is not open for responses.", 409);
   const owner = await env.DB.prepare(
     "SELECT h.owner_user_id AS id,u.mobile FROM hospitals h JOIN users u ON u.id=h.owner_user_id WHERE h.id = ?",
   )

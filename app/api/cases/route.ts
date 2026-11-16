@@ -36,9 +36,11 @@ export async function POST(request: Request) {
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "Invalid case details.");
   if (new Date(parsed.data.scheduledAt).getTime() <= Date.now()) return jsonError("Scheduled time must be in the future.");
   const caseId = parsed.data.requestId ?? crypto.randomUUID(); const d = parsed.data;
-  await env.DB.batch([
+  const ownershipArgs = [caseId, user.hospitalId, user.id] as const;
+  const ownsCase = `EXISTS (SELECT 1 FROM cases existing WHERE existing.id=? AND existing.hospital_id=? AND existing.posted_by_user_id=?)`;
+  const [inserted] = await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO cases (id, hospital_id, posted_by_user_id, procedure_name, specialty, location, anaesthesia_type, scheduled_at, offered_fee_paise, urgency, duration_minutes, public_notes, bidding_enabled, status, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)").bind(caseId, user.hospitalId, user.id, d.procedureName, d.specialty || null, d.location, d.anaesthesiaType || "Not specified", d.scheduledAt, d.offeredFeeRupees * 100, d.urgency, d.durationMinutes, d.publicNotes ?? null, d.biddingEnabled ? 1 : 0),
-    env.DB.prepare("INSERT OR IGNORE INTO case_private_details (id, case_id, patient_initials, patient_age, patient_sex, contact_phone, location_instructions, clinical_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(caseId, caseId, d.patientInitials ?? null, d.patientAge ?? null, d.patientSex ?? null, d.contactPhone ?? null, d.locationInstructions ?? null, d.clinicalNotes ?? null),
+    env.DB.prepare(`INSERT OR IGNORE INTO case_private_details (id, case_id, patient_initials, patient_age, patient_sex, contact_phone, location_instructions, clinical_notes) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE ${ownsCase}`).bind(caseId, caseId, d.patientInitials ?? null, d.patientAge ?? null, d.patientSex ?? null, d.contactPhone ?? null, d.locationInstructions ?? null, d.clinicalNotes ?? null, ...ownershipArgs),
     env.DB.prepare(`INSERT OR IGNORE INTO notifications (id,user_id,case_id,kind,title,body,dedupe_key)
       SELECT lower(hex(randomblob(16))),u.id,?,'case_open',CASE WHEN ? IN ('urgent','emergency') THEN 'Urgent anaesthesia case' ELSE 'New open case' END,?,'case_open:'||?||':'||u.id
       FROM users u JOIN clinician_profiles cp ON cp.user_id=u.id
@@ -46,10 +48,17 @@ export async function POST(request: Request) {
       AND cp.verification_status='verified' AND (EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id AND a.status='available' AND datetime(a.start_at)<=CURRENT_TIMESTAMP AND datetime(a.end_at)>CURRENT_TIMESTAMP)
       OR (cp.case_notifications_enabled=1 AND cp.availability_status='available' AND datetime(cp.available_until)>CURRENT_TIMESTAMP
         AND NOT EXISTS (SELECT 1 FROM availability_slots a WHERE a.clinician_user_id=u.id)))
-      AND lower(cp.city)=lower((SELECT city FROM hospitals WHERE id=?))`).bind(caseId, d.urgency, `${d.procedureName} at ${d.location} is open for responses.`, caseId, user.hospitalId),
-    env.DB.prepare("INSERT OR IGNORE INTO notification_deliveries(id,notification_id,channel,status) SELECT 'in-app:'||id,id,'in_app','sent' FROM notifications WHERE case_id=? AND kind='case_open'").bind(caseId),
-    env.DB.prepare("INSERT OR IGNORE INTO notification_deliveries(id,notification_id,channel,status,error_code) SELECT 'sms:'||id,id,'sms','skipped','SMS_PENDING' FROM notifications WHERE case_id=? AND kind='case_open'").bind(caseId),
+      AND lower(cp.city)=lower((SELECT city FROM hospitals WHERE id=?))
+      AND ${ownsCase}`).bind(caseId, d.urgency, `${d.procedureName} at ${d.location} is open for responses.`, caseId, user.hospitalId, ...ownershipArgs),
+    env.DB.prepare(`INSERT OR IGNORE INTO notification_deliveries(id,notification_id,channel,status) SELECT 'in-app:'||id,id,'in_app','sent' FROM notifications WHERE case_id=? AND kind='case_open' AND ${ownsCase}`).bind(caseId, ...ownershipArgs),
+    env.DB.prepare(`INSERT OR IGNORE INTO notification_deliveries(id,notification_id,channel,status,error_code) SELECT 'sms:'||id,id,'sms','skipped','SMS_PENDING' FROM notifications WHERE case_id=? AND kind='case_open' AND ${ownsCase}`).bind(caseId, ...ownershipArgs),
   ]);
+  if (!inserted.meta.changes) {
+    const owned = await env.DB.prepare(`SELECT id FROM cases WHERE ${ownsCase} AND id=?`)
+      .bind(...ownershipArgs, caseId).first<{ id: string }>();
+    if (!owned) return jsonError("This case request ID is already in use.", 409, "CASE_REQUEST_CONFLICT");
+    return jsonOk({ case: { id: caseId, status: "open" } }, 201);
+  }
   await auditCase(caseId,user.id,"case_posted",{postedFeePaise:d.offeredFeeRupees*100,estimatedDurationMinutes:d.durationMinutes,biddingEnabled:d.biddingEnabled});
   waitUntil(sendCasePostedSmsForCase(caseId));
   waitUntil(sendWebPushForCase(caseId, "case_open"));

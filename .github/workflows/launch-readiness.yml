@@ -1,0 +1,52 @@
+name: Launch readiness
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/launch-readiness.yml'
+      - 'app/api/emergency/**'
+      - 'scripts/verify-simplified-case-posting.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        id: install
+        run: npm run install:ci
+      - name: Run verification scripts
+        run: |
+          mapfile -t checks < <(node -p 'require("./package.json").scripts.prebuild.split(" && ").join("\n")')
+          passed=0
+          failed=0
+          for check in "${checks[@]}"; do
+            echo "::group::$check"
+            read -r -a command <<< "$check"
+            if "${command[@]}"; then
+              passed=$((passed + 1))
+            else
+              failed=$((failed + 1))
+            fi
+            echo "::endgroup::"
+          done
+          echo "Verification commands passed: $passed. Failed: $failed."
+          test "$passed" -gt 0 && test "$failed" -eq 0
+      - name: Lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint
+      - name: TypeScript
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: ./node_modules/.bin/tsc --noEmit
+      - name: Build production bundle locally
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm --ignore-scripts run build
