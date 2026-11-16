@@ -165,5 +165,27 @@ assert.equal((await bidThroughCases()).status, 201);
 assert.equal(responseRow.get(sosId, doctor.id).status, 'available');
 console.log('General case bid route rejects expired or concurrently closed SOS cases and accepts an active case.');
 
+
+const existingCase = db.prepare("SELECT id FROM cases WHERE hospital_id=? AND posted_by_user_id='hospital' AND is_planned=0").get(hospitalId);
+assert.ok(existingCase);
+db.prepare("DELETE FROM case_private_details WHERE case_id=?").run(existingCase.id);
+db.exec("INSERT INTO users(id,mobile,full_name,role,status) VALUES('other-hospital','400','Other Hospital','hospital','verified')");
+db.exec("INSERT INTO hospitals(id,owner_user_id,name,address,approval_status) VALUES('other','other-hospital','Other Hospital','Other address','approved')");
+const owner = { id: 'hospital', role: 'hospital', status: 'verified', accountStatus: 'active', hospitalId, hospitalApprovalStatus: 'approved' };
+function retryCase() {
+  return cases.POST(new Request('https://example.test/api/cases', {
+    method: 'POST', body: JSON.stringify({ ...payload, requestId: existingCase.id, patientInitials: 'QA' }),
+  }));
+}
+user = { ...owner, id: 'other-hospital', hospitalId: 'other' };
+assert.equal((await retryCase()).status, 409);
+assert.equal(db.prepare("SELECT COUNT(*) AS n FROM case_private_details WHERE case_id=?").get(existingCase.id).n, 0);
+
+user = owner;
+assert.equal((await retryCase()).status, 201);
+assert.equal(db.prepare("SELECT patient_initials FROM case_private_details WHERE case_id=?").get(existingCase.id).patient_initials, 'QA');
+assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cases').get().n, 6);
+console.log('Case request ID replay is restricted to the original hospital account.');
+
 db.close();
 console.log('Hospital standard/advance and Surgeon advance posting pass without removed fields; legacy details remain readable; fee validation preserved.');
