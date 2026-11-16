@@ -187,5 +187,27 @@ assert.equal(db.prepare("SELECT patient_initials FROM case_private_details WHERE
 assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cases').get().n, 6);
 console.log('Case request ID replay is restricted to the original hospital account.');
 
+
+let adminAllowed = false;
+modules['@/lib/server/admin'] = { isAdmin: async () => adminAllowed };
+modules['@/lib/server/audit'] = {};
+const approveClinician = load('app/api/admin/clinicians/[id]/approve/route.ts');
+db.exec("INSERT INTO users(id,mobile,full_name,role) VALUES('pending-doctor','500','Pending Anaesthetist','anesthetist')");
+db.exec("INSERT INTO clinician_profiles(id,user_id,registration_number,qualification) VALUES('pending-profile','pending-doctor','test-pmc','MD')");
+function recordPmcDecision(body) {
+  const request = new Request('https://example.test/api/admin/clinicians/pending-profile/approve', { method: 'POST', body });
+  return approveClinician.POST(request, { params: Promise.resolve({ id: 'pending-profile' }) });
+}
+assert.equal((await recordPmcDecision('{"mode":"verified"}')).status, 403);
+adminAllowed = true;
+for (const body of [undefined, '{', '{}']) {
+  assert.equal((await recordPmcDecision(body)).status, 400);
+}
+assert.equal((await recordPmcDecision('{"mode":"unavailable"}')).status, 200);
+assert.equal((await recordPmcDecision('{"mode":"manual"}')).status, 409);
+assert.equal(db.prepare("SELECT status FROM users WHERE id='pending-doctor'").get().status, 'pending');
+assert.equal(db.prepare("SELECT pmc_verification_status FROM clinician_profiles WHERE id='pending-profile'").get().pmc_verification_status, 'unavailable');
+console.log('PMC approval requires admin access and an explicit decision; unavailable verification keeps accounts pending.');
+
 db.close();
 console.log('Hospital standard/advance and Surgeon advance posting pass without removed fields; legacy details remain readable; fee validation preserved.');
