@@ -17,7 +17,18 @@ const DB = {
     let args = [];
     return { bind(...values) { args = values; return this; }, async first() { return db.prepare(sql).get(...args) ?? null; }, async all() { return { results: db.prepare(sql).all(...args) }; }, async run() { beforeRun(sql); return { meta: db.prepare(sql).run(...args) }; } };
   },
-  async batch(statements) { for (const statement of statements) await statement.run(); },
+  async batch(statements) {
+    const results = [];
+    db.exec('BEGIN');
+    try {
+      for (const statement of statements) results.push(await statement.run());
+      db.exec('COMMIT');
+      return results;
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  },
 };
 let user;
 const modules = {
