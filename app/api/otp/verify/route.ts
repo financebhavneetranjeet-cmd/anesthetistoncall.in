@@ -22,7 +22,14 @@ export async function POST(request: Request) {
     if (!await verifyOtp(challenge.mobile, otp.data)) return jsonError("Incorrect OTP. Please check and try again.", 401, "OTP_INCORRECT");
     if (challenge.purpose === "login") {
       const user = await findLoginUser(challenge.mobile);
-      if (!user || !loginAllowed(user, challenge.mobile)) { const denied = loginDeniedMessage(user); return jsonError(denied.message, 403, denied.code); }
+      if (user && user.accountStatus !== "blocked" && !loginAllowed(user, challenge.mobile)) { const denied = loginDeniedMessage(user); return jsonError(denied.message, 403, denied.code); }
+      if (!user || user.accountStatus === "blocked") {
+        const restriction = await registrationRestriction(challenge.mobile);
+        if (restriction) return restriction;
+        const registration = await env.DB.prepare("UPDATE otp_challenges SET purpose = 'registration', status = 'verified', verified_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending' AND consumed_at IS NULL AND datetime(expires_at) > CURRENT_TIMESTAMP").bind(challenge.id).run();
+        if (!registration.meta.changes) return jsonError("This OTP request is no longer valid.", 409, "OTP_INVALID_STATE");
+        return jsonOk({ challengeId: challenge.id, mobile: challenge.mobile, registrationRequired: true, redirectTo: "/register/choose-role" });
+      }
       const consumed = await env.DB.prepare("UPDATE otp_challenges SET status = 'verified', verified_at = CURRENT_TIMESTAMP, consumed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending' AND consumed_at IS NULL AND datetime(expires_at) > CURRENT_TIMESTAMP").bind(challenge.id).run();
       if (!consumed.meta.changes) return jsonError("This OTP request is no longer valid.", 409, "OTP_INVALID_STATE");
       await createSession(user.id);

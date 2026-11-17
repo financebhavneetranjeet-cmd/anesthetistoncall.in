@@ -1,4 +1,4 @@
-const history = `u.id AS userId, a.user_id IS NOT NULL AS reregistered, a.blocking_reason AS blockingReason`;
+const history = `u.id AS userId, a.user_id IS NOT NULL AS reregistered, a.blocking_reason AS blockingReason, a.archived_by_reregistration AS previouslyBlocked`;
 const activePending = `u.status = 'pending' AND u.account_status = 'active'
   AND NOT EXISTS (SELECT 1 FROM mobile_security_bans b WHERE b.mobile = u.mobile AND b.cleared_at IS NULL)`;
 

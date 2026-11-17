@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   if (restriction) return restriction;
   const userId = crypto.randomUUID(); const clinicianId = crypto.randomUUID();
   try { await env.DB.batch([
-    env.DB.prepare(`INSERT INTO users (id, mobile, email, full_name, role, status, medical_registration_number, registration_challenge_id, previous_account_id) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ${previousAccount})`).bind(userId, data.mobile, data.email || null, data.fullName, data.role, data.registrationNumber, data.challengeId, data.mobile),
+    env.DB.prepare(`INSERT INTO users (id, mobile, email, full_name, role, status, medical_registration_number, registration_challenge_id, previous_account_id) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ${previousAccount})`).bind(userId, data.mobile, data.email || null, data.fullName, data.role, data.registrationNumber, data.challengeId, data.mobile, data.mobile),
     env.DB.prepare("INSERT INTO clinician_profiles (id, user_id, state_council, registration_number, qualification, city, verification_status, availability_status) VALUES (?, ?, ?, ?, ?, 'Amritsar', 'pending', 'unavailable')").bind(clinicianId, userId, data.stateCouncil, data.registrationNumber, data.qualification),
   ]); } catch (error) { return registrationConflict(error); }
   const application = await env.DB.prepare("SELECT previous_account_id IS NOT NULL AS fresh FROM users WHERE id = ?").bind(userId).first<{ fresh: number }>();

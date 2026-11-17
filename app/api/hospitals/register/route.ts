@@ -62,7 +62,7 @@ export async function POST(request: Request) {
   try { await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users (id, mobile, email, full_name, role, status, registration_challenge_id, previous_account_id) VALUES (?, ?, ?, ?, 'hospital', 'pending', ?, ${previousAccount})`,
-    ).bind(userId, data.mobile, data.email || null, data.fullName, data.challengeId, data.mobile),
+    ).bind(userId, data.mobile, data.email || null, data.fullName, data.challengeId, data.mobile, data.mobile),
     env.DB.prepare(
       "INSERT INTO hospitals (id, owner_user_id, name, facility_type, address, city, google_place_id, latitude, longitude, google_maps_url, approval_status) VALUES (?, ?, ?, ?, ?, 'Amritsar', ?, ?, ?, ?, 'pending')",
     ).bind(

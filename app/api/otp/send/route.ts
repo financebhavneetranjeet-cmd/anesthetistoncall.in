@@ -16,8 +16,12 @@ export async function POST(request: Request) {
     if (restriction) return restriction;
   }
   if (purpose === "login") {
-    const user = await env.DB.prepare("SELECT id, status FROM users WHERE mobile = ? LIMIT 1").bind(parsed.data).first<{ id: string; status: string }>();
-    if (!user || user.status === "suspended") return jsonError("This account cannot sign in. Check your mobile number or contact the administrator.", 403, "LOGIN_UNAVAILABLE");
+    const user = await env.DB.prepare("SELECT id, status, account_status AS accountStatus FROM users WHERE mobile = ? LIMIT 1").bind(parsed.data).first<{ id: string; status: string; accountStatus: string }>();
+    if (!user) {
+      const restriction = await registrationRestriction(parsed.data);
+      if (restriction) return restriction;
+    }
+    if (user?.status === "suspended" && user.accountStatus !== "blocked") return jsonError("This account cannot sign in. Check your mobile number or contact the administrator.", 403, "LOGIN_UNAVAILABLE");
   }
   const recent = await env.DB.prepare("SELECT id FROM otp_challenges WHERE mobile = ? AND datetime(created_at) > datetime('now', '-60 seconds') LIMIT 1").bind(parsed.data).first();
   if (recent) return jsonError("Wait a minute before requesting another OTP.", 429, "OTP_COOLDOWN");

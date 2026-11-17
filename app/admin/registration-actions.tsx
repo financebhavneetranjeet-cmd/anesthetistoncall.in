@@ -7,6 +7,7 @@ export type RegistrationHistory = {
   userId: string;
   createdAt: string;
   reregistered: number;
+  previouslyBlocked: number | null;
   blockingReason: string | null;
 };
 
@@ -39,7 +40,7 @@ export function RegistrationActions({ item, onDecision }: { item: RegistrationHi
   return <div className="mt-4 space-y-2 text-sm">
     <p>Registered {registered.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}</p>
     {Boolean(item.reregistered) && <div className="rounded-xl bg-amber-50 p-3">
-      <p className="font-semibold">Re-registered after deletion</p>
+      <p className="font-semibold">{item.previouslyBlocked ? "Re-registered after being blocked" : "Re-registered after deletion"}</p>
       <p className="mt-1 break-words">Previous blocking reason · {item.blockingReason ?? "Unavailable"}</p>
     </div>}
     {action ? <div className="space-y-2">

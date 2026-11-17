@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 import { mobileSchema } from "@/lib/auth/otp";
 import { jsonError, jsonOk } from "@/lib/server/http";
-import { registrationCutoff, registrationRestriction } from "@/lib/server/registration";
+import { blockedOtpCutoff, registrationCutoff, registrationRestriction } from "@/lib/server/registration";
 import { createSession } from "@/lib/server/session";
 import { findLoginUser, loginAllowed, loginDeniedMessage, postLoginDestination } from "@/lib/server/login";
 import { dashboardAccounts } from "@/lib/server/dashboard-access";
@@ -67,7 +67,8 @@ export async function POST(request: Request) {
     const claims = verifiedTokenClaims(accessToken);
     const identifier = result ? verifiedIdentifier(result) ?? (claims && verifiedIdentifier(claims)) : null;
     if (!result || result.type !== "success" || identifier !== `91${mobile}`) return jsonError("The verified mobile does not match. Please verify this number again.", 401, "OTP_NOT_VERIFIED");
-    const user = purpose === "login" ? await findLoginUser(mobile, role) : null;
+    const account = purpose === "login" ? await findLoginUser(mobile, role) : null;
+    const user = account?.accountStatus === "blocked" ? null : account;
     if (purpose === "login" && user && !loginAllowed(user, mobile)) { const denied = loginDeniedMessage(user); return jsonError(denied.message, 403, denied.code); }
     const challengePurpose = purpose === "login" && !user ? "registration" : purpose;
     if (challengePurpose === "registration") {
@@ -87,10 +88,11 @@ export async function POST(request: Request) {
     const inserted = await env.DB.prepare(`INSERT OR IGNORE INTO otp_challenges
       (id, mobile, purpose, status, attempt_count, expires_at, verified_at, consumed_at)
       SELECT ?, ?, ?, 'verified', 0, ?, CURRENT_TIMESTAMP, ?
-      WHERE NOT EXISTS (SELECT 1 FROM archived_accounts WHERE mobile = ? AND deleted_at >= ?)
+      WHERE COALESCE((${blockedOtpCutoff}), '') < ?
+        AND NOT EXISTS (SELECT 1 FROM archived_accounts WHERE mobile = ? AND deleted_at >= ?)
         AND NOT EXISTS (SELECT 1 FROM mobile_security_bans WHERE mobile = ? AND (cleared_at IS NULL OR cleared_at >= ?))`)
       .bind(id, mobile, challengePurpose, expiresAt, user ? new Date().toISOString() : null,
-        mobile, new Date(issuedAt).toISOString(), mobile, new Date(issuedAt).toISOString()).run();
+        mobile, new Date(issuedAt).toISOString(), mobile, new Date(issuedAt).toISOString(), mobile, new Date(issuedAt).toISOString()).run();
     if (!inserted.meta.changes) return jsonError("This verification has already been used. Please verify again.", 409, "OTP_ALREADY_USED");
     if (user) {
       const accounts = await dashboardAccounts({ mobile, role: user.role });

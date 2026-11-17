@@ -20,6 +20,7 @@ export const archivedAccounts = sqliteTable("archived_accounts", {
   mobile: text("mobile").notNull(),
   deletedAt: text("deleted_at").notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
   blockingReason: text("blocking_reason"),
+  archivedByReregistration: integer("archived_by_reregistration").notNull().default(0),
 }, table => [index("archived_accounts_mobile_idx").on(table.mobile, table.deletedAt)]);
 
 export const mobileSecurityBans = sqliteTable("mobile_security_bans", {

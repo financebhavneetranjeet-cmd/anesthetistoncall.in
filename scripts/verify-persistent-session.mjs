@@ -190,9 +190,10 @@ function submit(role, mobile, challengeId, medicalNumber) {
     : api.clinician(post({ ...details, role, stateCouncil: "PMC", registrationNumber: medicalNumber, qualification: "MD" }));
 }
 
-for (const [index, role] of ["hospital", "anesthetist", "surgeon"].entries()) {
-  await test(`${role}: block, delete, OTP, fresh documents, Admin approval and role access`, async () => {
-    const oldId = `former-${role}`;
+for (const [index, role] of ["hospital", "anesthetist", "surgeon", "hospital", "anesthetist", "surgeon"].entries()) {
+  const adminDeleted = index < 3;
+  await test(`${role}: ${adminDeleted ? "deleted" : "blocked"} account, fresh documents, Admin approval and role access`, async () => {
+    const oldId = `former-${role}-${index}`;
     const mobile = `900000001${index}`;
     verifiedMobile = mobile;
     seed(oldId, role, mobile);
@@ -210,24 +211,28 @@ for (const [index, role] of ["hospital", "anesthetist", "surgeon"].entries()) {
     assert.equal((await decision(oldId, "block")).status, 403);
     await asAdmin();
     assert.equal((await decision(oldId, "block", "Previous blocking reason")).status, 200);
-    assert.equal((await otpExchange(mobile, Date.now() / 1000)).status, 409);
-    assert.equal((await decision(oldId, "delete")).status, 200);
-    assert.equal((await decision(oldId, "restore")).status, 409);
+    if (adminDeleted) {
+      assert.equal((await decision(oldId, "delete")).status, 200);
+      assert.equal((await decision(oldId, "restore")).status, 409);
+    }
     assert.equal(sqlite.prepare("SELECT posted_by_user_id FROM cases WHERE id=?").get(oldId).posted_by_user_id, oldId);
     assert.equal(sqlite.prepare("SELECT case_id FROM case_payments WHERE id=?").get(oldId).case_id, oldId);
     assert.equal(sqlite.prepare("SELECT user_id FROM verification_documents WHERE id=?").get(oldId).user_id, oldId);
-    assert.equal(sqlite.prepare("SELECT 1 FROM google_identities WHERE mobile=?").get(mobile), undefined);
     assert.equal(sqlite.prepare("SELECT 1 FROM push_subscriptions WHERE user_id=?").get(oldId), undefined);
     cookies.set("aoc_session", oldCookie);
     assert.equal(await api.getSessionUser(), null);
     assert.equal((await otpExchange(mobile, Date.now() / 1000 - 20)).status, 409);
-    const proved = await otpExchange(mobile, Date.now() / 1000 + 1);
+    const proved = await otpExchange(mobile, Date.now() / 1000 + 1, "login", role);
     assert.equal(proved.status, 200);
-    const challenge = (await proved.json()).challengeId;
+    assert.equal(await api.getSessionUser(), null);
+    const { challengeId: challenge, redirectTo } = await proved.json();
+    assert.equal(redirectTo, "/register/choose-role");
+    if (!adminDeleted) assert.equal(sqlite.prepare("SELECT mobile FROM users WHERE id=?").get(oldId).mobile, mobile);
     const [attempt1, attempt2] = await Promise.all([submit(role, mobile, challenge, oldId), submit(role, mobile, challenge, oldId)]);
     assert.deepEqual([attempt1.status, attempt2.status].sort(), [201, 409]);
     const result = await (attempt1.status === 201 ? attempt1 : attempt2).json();
     const profileId = (result.registration ?? result.clinician).id;
+    assert.equal(sqlite.prepare("SELECT 1 FROM google_identities WHERE mobile=?").get(mobile), undefined);
     const pending = await api.getSessionUser();
     assert.notEqual(pending.id, oldId);
     assert.equal(pending.role, role);
@@ -243,6 +248,7 @@ for (const [index, role] of ["hospital", "anesthetist", "surgeon"].entries()) {
     assert.equal(item.userId, pending.id);
     assert.equal(item.blockingReason, "Previous blocking reason");
     assert.equal(item.reregistered, 1);
+    assert.equal(item.previouslyBlocked, adminDeleted ? 0 : 1);
     assert.equal((await approve()).status, 409);
     await api.createSession(pending.id);
     const form = new FormData();
@@ -278,6 +284,7 @@ await test("a number ban survives deletion, rejects OTP and requires Admin clear
   await asAdmin();
   assert.equal((await decision("banned", "block")).status, 200);
   assert.equal((await decision("banned", "ban")).status, 200);
+  assert.equal((await otpExchange(mobile, Date.now() / 1000 + 1, "login", "hospital")).status, 403);
   assert.equal((await decision("banned", "delete")).status, 200);
   assert.equal((await otpExchange(mobile, Date.now() / 1000 + 1)).status, 403);
   assert.equal(await api.findLoginUser(mobile, "hospital"), null);

@@ -26,7 +26,7 @@ export async function findLoginUser(mobile: string, role?: "hospital" | "anesthe
     role = "admin";
   }
   if (!role) {
-    const matches = await env.DB.prepare(`SELECT u.id, u.role, u.status, CASE WHEN u.status = 'suspended' THEN 'suspended' ELSE u.account_status END AS accountStatus,
+    const matches = await env.DB.prepare(`SELECT u.id, u.role, u.status, CASE WHEN u.account_status = 'blocked' THEN 'blocked' WHEN u.status = 'suspended' THEN 'suspended' ELSE u.account_status END AS accountStatus,
       h.approval_status AS hospitalApprovalStatus,
       cp.verification_status AS clinicianVerificationStatus
       FROM users u
@@ -35,7 +35,7 @@ export async function findLoginUser(mobile: string, role?: "hospital" | "anesthe
       WHERE u.mobile = ? LIMIT 2`).bind(mobile).all<LoginUser>();
     return matches.results.length === 1 ? matches.results[0] : null;
   }
-  return env.DB.prepare(`SELECT u.id, u.role, u.status, CASE WHEN u.status = 'suspended' THEN 'suspended' ELSE u.account_status END AS accountStatus,
+  return env.DB.prepare(`SELECT u.id, u.role, u.status, CASE WHEN u.account_status = 'blocked' THEN 'blocked' WHEN u.status = 'suspended' THEN 'suspended' ELSE u.account_status END AS accountStatus,
     h.approval_status AS hospitalApprovalStatus,
     cp.verification_status AS clinicianVerificationStatus
     FROM users u
