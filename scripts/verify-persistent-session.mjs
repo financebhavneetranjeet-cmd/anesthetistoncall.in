@@ -28,6 +28,7 @@ env.DB = {
 globalThis.__emailTest = { env, jobs, jar: { get: key => cookies.has(key) ? { value: cookies.get(key) } : undefined, set: (key, value, options) => { assert.equal(options.httpOnly, true); assert.equal(options.secure, true); cookies.set(key, value); }, delete: key => cookies.delete(key) } };
 const bundle = await build({
   stdin: { contents: `export * from './lib/server/session'; export {POST as hospital} from './app/api/hospitals/register/route'; export {POST as clinician} from './app/api/clinicians/register/route'; export {POST as mobileLogin} from './app/api/otp/widget/route'; export {POST as refresh, DELETE as logout} from './app/api/account/session/route'; export * from './lib/server/login';
+    export {GET as adminControl, POST as clearAccessLog} from './app/api/admin/control/route';
     export {POST as adminStatus} from './app/api/admin/users/[id]/status/route';
     export {POST as approveClinician} from './app/api/admin/clinicians/[id]/approve/route';
     export {POST as approveHospital} from './app/api/admin/hospitals/[id]/approve/route';
@@ -299,6 +300,32 @@ await test("a number ban survives deletion, rejects OTP and requires Admin clear
   assert.equal((await decision(fresh.id, "reject")).status, 200);
   assert.equal((await decision(fresh.id, "restore")).status, 409);
   assert.equal((await (await api.pendingHospitals()).json()).hospitals.some(item => item.userId === fresh.id), false);
+});
+await test("Admin clears the Access log view and new events remain visible", async () => {
+  const url = "https://anesthetistoncall.in/api/admin/control";
+  const clear = (origin = "https://anesthetistoncall.in") =>
+    api.clearAccessLog(new Request(url, { method: "POST", headers: { origin } }));
+  const control = async () => (await api.adminControl(new Request(url))).json();
+
+  await api.createSession("hospital");
+  assert.equal((await clear()).status, 403);
+  await asAdmin();
+  assert.equal((await clear("https://other.invalid")).status, 403);
+  assert.ok((await control()).accessAudit.length > 0);
+  const count = () => sqlite.prepare("SELECT COUNT(*) AS total FROM user_access_audit_logs").get().total;
+  const before = count();
+
+  assert.equal((await clear()).status, 200);
+  assert.equal((await clear()).status, 200);
+  const cleared = await control();
+  assert.deepEqual(cleared.accessAudit, []);
+  assert.equal(count(), before);
+  assert.equal(cleared.audit.filter(entry => entry.action === "access_log_cleared").length, 1);
+
+  assert.equal((await decision("doctor", "block")).status, 200);
+  const updated = await control();
+  assert.deepEqual(updated.accessAudit.map(entry => entry.userId), ["doctor"]);
+  assert.equal(count(), before + 1);
 });
 console.log(`${count} persistent-session integration groups passed (isolated SQLite; SMS provider and cookie store mocked).`);
 sqlite.close();

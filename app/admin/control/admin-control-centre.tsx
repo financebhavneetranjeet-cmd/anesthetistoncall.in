@@ -78,6 +78,7 @@ export function AdminControlCentre() {
   const [accountStatus, setAccountStatus] = useState("all");
   const [caseStatus, setCaseStatus] = useState("all");
   const [tab, setTab] = useState("users");
+  const [clearingAccessLog, setClearingAccessLog] = useState(false);
   const [msg, setMsg] = useState("");
   const [accessAction, setAccessAction] = useState<{ user: User; action: "suspend" | "block" | "restore" | "delete" | "ban" | "clear-ban" } | null>(null);
   const [reason, setReason] = useState("");
@@ -111,6 +112,21 @@ export function AdminControlCentre() {
     const j = (await r.json()) as { error?: { message?: string } };
     setMsg(r.ok ? "Action completed." : (j.error?.message ?? "Action failed."));
     if (r.ok) void load();
+  }
+  async function clearAccessLog() {
+    if (!window.confirm("Clear all current entries from the Access log? Audit history will be retained.")) return;
+    setClearingAccessLog(true);
+    try {
+      const response = await fetch("/api/admin/control", { method: "POST" });
+      const result = await response.json() as { error?: { message?: string } };
+      if (!response.ok) throw new Error(result.error?.message ?? "Unable to clear the access log.");
+      await load();
+      setMsg("Access log cleared.");
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : "Unable to clear the access log.");
+    } finally {
+      setClearingAccessLog(false);
+    }
   }
   async function confirmAccessAction() {
     if (!accessAction || reason.trim().length < 3) { setMsg("Enter a clear reason before confirming."); return; }
@@ -361,7 +377,15 @@ export function AdminControlCentre() {
                 </article>
               ))}
             </div>
-          ) : <div>{data.accessAudit.map((a) => <article key={a.id} className="border-b p-4 last:border-0"><div className="flex flex-wrap items-center gap-2"><b>{a.userName}</b><StatusBadge value={a.newStatus} /></div><p className="mt-1 text-sm text-slate-600">{a.previousStatus} → {a.newStatus} · {a.action}</p><p className="mt-1 text-sm">Reason: {a.reason}</p>{a.suspensionExpiresAt ? <p className="mt-1 text-sm text-amber-700">Suspension expires: {new Date(a.suspensionExpiresAt).toLocaleString("en-IN")}</p> : null}<p className="mt-1 break-words text-xs text-slate-500">{a.adminActor} · {new Date(a.createdAt).toLocaleString("en-IN")}</p></article>)}</div>}
+          ) : <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+              <h2 className="font-semibold">Access log</h2>
+              <Button variant="outline" disabled={clearingAccessLog || data.accessAudit.length === 0} onClick={() => void clearAccessLog()}>
+                {clearingAccessLog ? "Clearing…" : "Clear access log"}
+              </Button>
+            </div>
+            {data.accessAudit.length === 0 && <p className="p-4 text-sm text-slate-600">No access log entries.</p>}
+            {data.accessAudit.map((a) => <article key={a.id} className="border-b p-4 last:border-0"><div className="flex flex-wrap items-center gap-2"><b>{a.userName}</b><StatusBadge value={a.newStatus} /></div><p className="mt-1 text-sm text-slate-600">{a.previousStatus} → {a.newStatus} · {a.action}</p><p className="mt-1 text-sm">Reason: {a.reason}</p>{a.suspensionExpiresAt ? <p className="mt-1 text-sm text-amber-700">Suspension expires: {new Date(a.suspensionExpiresAt).toLocaleString("en-IN")}</p> : null}<p className="mt-1 break-words text-xs text-slate-500">{a.adminActor} · {new Date(a.createdAt).toLocaleString("en-IN")}</p></article>)}</div>}
         </section>
       </div>
       {accessAction && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" role="dialog" aria-modal="true" aria-labelledby="access-action-title"><section className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><h2 id="access-action-title" className="text-xl font-bold capitalize">{accessAction.action} {accessAction.user.fullName}?</h2><p className="mt-2 text-sm leading-6 text-slate-600">{accessAction.action === "delete" ? "Delete this login and retain its historical records. A new application will require OTP and Admin approval." : accessAction.action === "ban" ? "Prevent sign-in and registration for this number until an administrator clears the ban." : accessAction.action === "clear-ban" ? "Clear the number ban. Any deleted account stays deleted." : "Update this account’s platform access."}</p>{accessAction.action === "suspend" ? <label className="mt-5 block text-sm font-semibold">Suspension period<select value={suspensionHours} onChange={(e) => setSuspensionHours(e.target.value)} className="mt-2 w-full rounded-xl border p-3 font-normal"><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option><option value="720">30 days</option></select></label> : null}<label className="mt-5 block text-sm font-semibold">Reason<textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={4} placeholder="Enter the reason for this action" className="mt-2 w-full rounded-xl border p-3 font-normal outline-none focus:border-blue-600" /></label><div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => { setAccessAction(null); setReason(""); }} className="min-h-12 rounded-xl border font-semibold">Cancel</button><button onClick={() => void confirmAccessAction()} disabled={reason.trim().length < 3} className="min-h-12 rounded-xl bg-slate-900 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Confirm {accessAction.action}</button></div></section></div>}

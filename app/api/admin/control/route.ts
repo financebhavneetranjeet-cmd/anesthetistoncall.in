@@ -1,9 +1,25 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
-import { isAdmin } from "@/lib/server/admin";
+import { getAdminIdentity, isAdmin } from "@/lib/server/admin";
 import { jsonError, jsonOk } from "@/lib/server/http";
 
 const querySchema = z.object({ q: z.string().trim().max(80).default(""), role: z.enum(["all", "hospital", "anesthetist", "surgeon", "admin"]).default("all"), verificationStatus: z.enum(["all", "pending", "verified", "rejected"]).default("all"), accountStatus: z.enum(["all", "active", "suspended", "blocked", "deleted"]).default("all"), caseStatus: z.enum(["all", "pending_approval", "open", "offered", "assigned", "cancelled", "completed"]).default("all") });
+
+// The latest clear records the highest visible access-log row without removing audit history.
+const clearedAccessLog = `COALESCE((SELECT MAX(CAST(target_id AS INTEGER))
+  FROM admin_audit_logs WHERE action = 'access_log_cleared' AND target_type = 'access_log'), 0)`;
+
+export async function POST(request: Request) {
+  if (request.headers.get("origin") !== new URL(request.url).origin) return jsonError("Same-origin request required.", 403);
+  const admin = await getAdminIdentity();
+  if (!admin) return jsonError("Admin access required.", 403);
+  if (!env.DB) return jsonError("Database unavailable.", 503);
+  await env.DB.prepare(`INSERT INTO admin_audit_logs (id, actor_email, action, target_type, target_id)
+    SELECT ?, ?, 'access_log_cleared', 'access_log', CAST(MAX(rowid) AS TEXT)
+    FROM user_access_audit_logs HAVING MAX(rowid) > ${clearedAccessLog}`)
+    .bind(crypto.randomUUID(), admin.actor).run();
+  return jsonOk({});
+}
 
 export async function GET(request: Request) {
   if (!(await isAdmin())) return jsonError("Admin access required.", 403);
@@ -22,7 +38,7 @@ export async function GET(request: Request) {
     env.DB.prepare("SELECT SUM(CASE WHEN role='hospital' THEN 1 ELSE 0 END) AS hospitals,SUM(CASE WHEN role='anesthetist' THEN 1 ELSE 0 END) AS anesthetists,SUM(CASE WHEN role='surgeon' THEN 1 ELSE 0 END) AS surgeons FROM users").first(),
     env.DB.prepare("SELECT d.id,d.channel,d.status,d.error_code AS errorCode,d.retry_count AS retryCount,d.attempted_at AS attemptedAt,n.title,n.case_id AS caseId FROM notification_deliveries d JOIN notifications n ON n.id=d.notification_id ORDER BY d.attempted_at DESC LIMIT 50").all(),
     env.DB.prepare("SELECT id,actor_email AS actorEmail,action,target_type AS targetType,target_id AS targetId,details,created_at AS createdAt FROM admin_audit_logs ORDER BY created_at DESC LIMIT 50").all(),
-    env.DB.prepare("SELECT a.id,a.user_id AS userId,u.full_name AS userName,a.action,a.reason,a.admin_actor AS adminActor,a.previous_status AS previousStatus,a.new_status AS newStatus,a.suspension_expires_at AS suspensionExpiresAt,a.created_at AS createdAt FROM user_access_audit_logs a JOIN users u ON u.id=a.user_id ORDER BY a.created_at DESC LIMIT 100").all(),
+    env.DB.prepare(`SELECT a.id,a.user_id AS userId,u.full_name AS userName,a.action,a.reason,a.admin_actor AS adminActor,a.previous_status AS previousStatus,a.new_status AS newStatus,a.suspension_expires_at AS suspensionExpiresAt,a.created_at AS createdAt FROM user_access_audit_logs a JOIN users u ON u.id=a.user_id WHERE a.rowid > ${clearedAccessLog} ORDER BY a.created_at DESC, a.rowid DESC LIMIT 100`).all(),
   ]);
   return jsonOk({ stats, roleCounts, users: users.results, cases: cases.results, deliveries: deliveries.results, audit: audit.results, accessAudit: accessAudit.results });
 }
