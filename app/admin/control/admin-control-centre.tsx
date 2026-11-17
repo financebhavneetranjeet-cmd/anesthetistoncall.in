@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "@/components/native-link";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Activity,
@@ -28,7 +29,8 @@ type User = {
   email: string | null;
   role: string;
   status: string;
-  accountStatus: "active" | "suspended" | "blocked";
+  accountStatus: "active" | "suspended" | "blocked" | "deleted";
+  banned: number;
   suspendedUntil: string | null;
   verificationStatus: string;
   hospitalName: string | null;
@@ -77,7 +79,7 @@ export function AdminControlCentre() {
   const [caseStatus, setCaseStatus] = useState("all");
   const [tab, setTab] = useState("users");
   const [msg, setMsg] = useState("");
-  const [accessAction, setAccessAction] = useState<{ user: User; action: "suspend" | "block" | "restore" } | null>(null);
+  const [accessAction, setAccessAction] = useState<{ user: User; action: "suspend" | "block" | "restore" | "delete" | "ban" | "clear-ban" } | null>(null);
   const [reason, setReason] = useState("");
   const [suspensionHours, setSuspensionHours] = useState("24");
   const load = useCallback(async () => {
@@ -202,7 +204,7 @@ export function AdminControlCentre() {
               <option value="all">All verification</option><option value="verified">Verified</option><option value="pending">Pending</option><option value="rejected">Rejected</option>
             </select>
             <select value={accountStatus} onChange={(e) => setAccountStatus(e.target.value)} className="rounded-xl border p-3">
-              <option value="all">All account statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="blocked">Blocked</option>
+              <option value="all">All account statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="blocked">Blocked</option><option value="deleted">Deleted</option>
             </select>
             <select
               value={caseStatus}
@@ -263,7 +265,9 @@ export function AdminControlCentre() {
                     <p className="mt-1 text-sm"><StatusBadge value={u.accountStatus} /><span className="ml-2 text-slate-500">Verification: {u.verificationStatus}</span>{u.accountStatus === "suspended" && u.suspendedUntil ? <span className="ml-2 text-amber-700">Until {new Date(u.suspendedUntil).toLocaleString("en-IN")}</span> : null}</p>
                   </div>
                   {u.role !== "admin" && <div className="grid grid-cols-2 gap-2 sm:flex">
-                    {u.accountStatus === "active" ? <><button onClick={() => setAccessAction({ user: u, action: "suspend" })} className="min-h-11 rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800">Suspend</button><button onClick={() => setAccessAction({ user: u, action: "block" })} className="min-h-11 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white">Block</button></> : <button onClick={() => setAccessAction({ user: u, action: "restore" })} className="col-span-2 min-h-11 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Restore / Reactivate</button>}
+                    {u.accountStatus === "active" ? <><button onClick={() => setAccessAction({ user: u, action: "suspend" })} className="min-h-11 rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800">Suspend</button><button onClick={() => setAccessAction({ user: u, action: "block" })} className="min-h-11 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white">Block</button></> : u.accountStatus !== "deleted" && !u.banned && u.status !== "rejected" ? <button onClick={() => setAccessAction({ user: u, action: "restore" })} className="col-span-2 min-h-11 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Restore / Reactivate</button> : null}
+                    {u.accountStatus === "blocked" && <Button variant="outline" onClick={() => setAccessAction({ user: u, action: "delete" })}>Delete account</Button>}
+                    {(u.accountStatus === "blocked" || u.accountStatus === "deleted" || Boolean(u.banned)) && <Button variant="outline" onClick={() => setAccessAction({ user: u, action: u.banned ? "clear-ban" : "ban" })}>{u.banned ? "Clear number ban" : "Ban number"}</Button>}
                   </div>}
                 </article>
               ))}
@@ -360,7 +364,7 @@ export function AdminControlCentre() {
           ) : <div>{data.accessAudit.map((a) => <article key={a.id} className="border-b p-4 last:border-0"><div className="flex flex-wrap items-center gap-2"><b>{a.userName}</b><StatusBadge value={a.newStatus} /></div><p className="mt-1 text-sm text-slate-600">{a.previousStatus} → {a.newStatus} · {a.action}</p><p className="mt-1 text-sm">Reason: {a.reason}</p>{a.suspensionExpiresAt ? <p className="mt-1 text-sm text-amber-700">Suspension expires: {new Date(a.suspensionExpiresAt).toLocaleString("en-IN")}</p> : null}<p className="mt-1 break-words text-xs text-slate-500">{a.adminActor} · {new Date(a.createdAt).toLocaleString("en-IN")}</p></article>)}</div>}
         </section>
       </div>
-      {accessAction && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" role="dialog" aria-modal="true" aria-labelledby="access-action-title"><section className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><h2 id="access-action-title" className="text-xl font-bold capitalize">{accessAction.action} {accessAction.user.fullName}?</h2><p className="mt-2 text-sm leading-6 text-slate-600">This immediately restricts protected platform access. Existing clinical, case, payment, rating and incident records will be retained.</p>{accessAction.action === "suspend" ? <label className="mt-5 block text-sm font-semibold">Suspension period<select value={suspensionHours} onChange={(e) => setSuspensionHours(e.target.value)} className="mt-2 w-full rounded-xl border p-3 font-normal"><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option><option value="720">30 days</option></select></label> : null}<label className="mt-5 block text-sm font-semibold">Reason<textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={4} placeholder="Enter the reason for this action" className="mt-2 w-full rounded-xl border p-3 font-normal outline-none focus:border-blue-600" /></label><div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => { setAccessAction(null); setReason(""); }} className="min-h-12 rounded-xl border font-semibold">Cancel</button><button onClick={() => void confirmAccessAction()} disabled={reason.trim().length < 3} className="min-h-12 rounded-xl bg-slate-900 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Confirm {accessAction.action}</button></div></section></div>}
+      {accessAction && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" role="dialog" aria-modal="true" aria-labelledby="access-action-title"><section className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><h2 id="access-action-title" className="text-xl font-bold capitalize">{accessAction.action} {accessAction.user.fullName}?</h2><p className="mt-2 text-sm leading-6 text-slate-600">{accessAction.action === "delete" ? "Delete this login and retain its historical records. A new application will require OTP and Admin approval." : accessAction.action === "ban" ? "Prevent sign-in and registration for this number until an administrator clears the ban." : accessAction.action === "clear-ban" ? "Clear the number ban. Any deleted account stays deleted." : "Update this account’s platform access."}</p>{accessAction.action === "suspend" ? <label className="mt-5 block text-sm font-semibold">Suspension period<select value={suspensionHours} onChange={(e) => setSuspensionHours(e.target.value)} className="mt-2 w-full rounded-xl border p-3 font-normal"><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option><option value="720">30 days</option></select></label> : null}<label className="mt-5 block text-sm font-semibold">Reason<textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={4} placeholder="Enter the reason for this action" className="mt-2 w-full rounded-xl border p-3 font-normal outline-none focus:border-blue-600" /></label><div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => { setAccessAction(null); setReason(""); }} className="min-h-12 rounded-xl border font-semibold">Cancel</button><button onClick={() => void confirmAccessAction()} disabled={reason.trim().length < 3} className="min-h-12 rounded-xl bg-slate-900 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Confirm {accessAction.action}</button></div></section></div>}
     </main>
   );
 }

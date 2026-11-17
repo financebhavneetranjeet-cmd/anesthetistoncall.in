@@ -2,17 +2,32 @@ import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const USER_ROLES = ["hospital", "anesthetist", "surgeon", "admin"] as const;
-export const USER_STATUSES = ["pending", "verified", "suspended"] as const;
+export const USER_STATUSES = ["pending", "verified", "suspended", "rejected"] as const;
 export const ACCOUNT_STATUSES = ["active", "suspended", "blocked"] as const;
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(), mobile: text("mobile").notNull(), email: text("email"), fullName: text("full_name").notNull(),
   role: text("role", { enum: USER_ROLES }).notNull(), status: text("status", { enum: USER_STATUSES }).notNull().default("pending"),
   accountStatus: text("account_status", { enum: ACCOUNT_STATUSES }).notNull().default("active"),
+  registrationChallengeId: text("registration_challenge_id"), previousAccountId: text("previous_account_id"),
   suspendedUntil: text("suspended_until"),
   medicalRegistrationNumber: text("medical_registration_number"), createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [uniqueIndex("users_mobile_role_unique").on(table.mobile, table.role), index("users_mobile_idx").on(table.mobile), index("users_role_idx").on(table.role)]);
+
+export const archivedAccounts = sqliteTable("archived_accounts", {
+  userId: text("user_id").primaryKey().references(() => users.id),
+  mobile: text("mobile").notNull(),
+  deletedAt: text("deleted_at").notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  blockingReason: text("blocking_reason"),
+}, table => [index("archived_accounts_mobile_idx").on(table.mobile, table.deletedAt)]);
+
+export const mobileSecurityBans = sqliteTable("mobile_security_bans", {
+  mobile: text("mobile").primaryKey(),
+  reason: text("reason").notNull(),
+  bannedAt: text("banned_at").notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  clearedAt: text("cleared_at"),
+});
 
 export const googleIdentities = sqliteTable("google_identities", {
   subject: text("subject").primaryKey(), mobile: text("mobile").notNull(),
@@ -195,13 +210,14 @@ export const clinicianProfiles = sqliteTable("clinician_profiles", {
   pmcVerificationStatus: text("pmc_verification_status", { enum: ["pending", "success", "failed", "unavailable", "manual"] }).notNull().default("pending"),
   pmcVerificationCheckedAt: text("pmc_verification_checked_at"),
   pmcVerificationNote: text("pmc_verification_note"),
+  archivedAt: text("archived_at"),
   availabilityStatus: text("availability_status", { enum: ["unavailable", "available"] }).notNull().default("unavailable"),
   caseNotificationsEnabled: integer("case_notifications_enabled", { mode: "boolean" }).notNull().default(false),
   availableUntil: text("available_until"),
   availabilityLatitude: text("availability_latitude"), availabilityLongitude: text("availability_longitude"), availabilityLocationAt: text("availability_location_at"),
   preferredEmergencyFeePaise: integer("preferred_emergency_fee_paise"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [uniqueIndex("clinician_registration_unique").on(table.stateCouncil, table.registrationNumber), uniqueIndex("clinician_user_unique").on(table.userId), index("clinician_available_idx").on(table.verificationStatus, table.availabilityStatus, table.availableUntil)]);
+}, (table) => [uniqueIndex("clinician_registration_unique").on(table.stateCouncil, table.registrationNumber).where(sql`${table.archivedAt} IS NULL`), uniqueIndex("clinician_user_unique").on(table.userId), index("clinician_available_idx").on(table.verificationStatus, table.availabilityStatus, table.availableUntil)]);
 
 export const availabilitySlots=sqliteTable("availability_slots",{id:text("id").primaryKey(),clinicianUserId:text("clinician_user_id").notNull().references(()=>users.id),status:text("status",{enum:["available","unavailable","tentative"]}).notNull(),startAt:text("start_at").notNull(),endAt:text("end_at").notNull(),preferredArea:text("preferred_area"),createdAt:text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),updatedAt:text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)},t=>[index("availability_slot_clinician_time_idx").on(t.clinicianUserId,t.startAt,t.endAt)]);
 
@@ -232,7 +248,7 @@ export const verificationDocuments = sqliteTable("verification_documents", {
   fileName: text("file_name").notNull(),
   contentType: text("content_type").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
-  documentType: text("document_type", { enum: ["pmc_certificate", "identity", "qualification"] }).notNull(),
+  documentType: text("document_type", { enum: ["pmc_certificate", "identity", "qualification", "facility_registration"] }).notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("verification_documents_user_idx").on(table.userId)]);
 

@@ -17,8 +17,11 @@ export async function createSession(userId: string): Promise<void> {
   const token = `${crypto.randomUUID()}${crypto.randomUUID()}`;
   const tokenHash = await sha256(token);
   const expires = new Date(Date.now() + SESSION_DAYS * 86_400_000);
-  await env.DB.prepare("INSERT INTO sessions (id, token_hash, user_id, expires_at) VALUES (?, ?, ?, ?)")
-    .bind(crypto.randomUUID(), tokenHash, userId, expires.toISOString()).run();
+  const inserted = await env.DB.prepare(`INSERT INTO sessions (id, token_hash, user_id, expires_at)
+    SELECT ?, ?, id, ? FROM users WHERE id = ? AND account_status = 'active' AND status IN ('pending', 'verified')
+    AND NOT EXISTS (SELECT 1 FROM mobile_security_bans b WHERE b.mobile = users.mobile AND b.cleared_at IS NULL)`)
+    .bind(crypto.randomUUID(), tokenHash, expires.toISOString(), userId).run();
+  if (!inserted.meta.changes) throw new Error("Account is unavailable");
   const jar = await cookies();
   const previous = jar.get(COOKIE_NAME)?.value;
   if (previous) await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(await sha256(previous)).run();
@@ -69,6 +72,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     WHERE s.token_hash = ? AND datetime(s.expires_at) > CURRENT_TIMESTAMP
       AND datetime(s.created_at, '+180 days') > CURRENT_TIMESTAMP
       AND u.account_status = 'active' AND u.status IN ('pending', 'verified')
+      AND NOT EXISTS (SELECT 1 FROM mobile_security_bans b WHERE b.mobile = u.mobile AND b.cleared_at IS NULL)
     LIMIT 1`).bind(tokenHash).first<SessionUser>();
 }
 

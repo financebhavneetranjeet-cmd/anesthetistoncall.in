@@ -137,7 +137,7 @@ export function HospitalRegistrationForm() {
     setBusy(true);
     setError(null);
     try {
-      const result = await api<{ registration: { status: string } }>("/api/hospitals/register", {
+      const result = await api<{ registration: { status: string; documentRequired: boolean } }>("/api/hospitals/register", {
         method: "POST",
         body: JSON.stringify({
           challengeId,
@@ -157,7 +157,8 @@ export function HospitalRegistrationForm() {
         }),
       });
       clearRegistrationHandoff();
-      if (result.registration.status === "approved")
+      if (result.registration.documentRequired) window.location.assign("/account/pending");
+      else if (result.registration.status === "approved")
         window.location.assign("/");
       else setStep("pending");
     } catch (cause) {

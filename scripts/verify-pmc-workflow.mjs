@@ -2,7 +2,7 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 const approval=fs.readFileSync("app/api/admin/clinicians/[id]/approve/route.ts","utf8");
 const admin=fs.readFileSync("app/admin/clinicians/clinician-approvals.tsx","utf8");
-const documents=fs.readFileSync("app/api/admin/clinicians/[id]/documents/route.ts","utf8");
+const documents=fs.readFileSync("lib/server/registration-documents.ts","utf8");
 const registration=fs.readFileSync("app/register/clinician/registration-form.tsx","utf8");
 function canApprove(certificateCount,mode){if(mode==="verified")return true;if(mode==="manual")return certificateCount>0;return false}
 assert.equal(canApprove(0,"verified"),true,"Test A");

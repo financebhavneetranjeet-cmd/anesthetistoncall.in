@@ -1,3 +1,4 @@
+import { registrationRestriction } from "@/lib/server/registration";
 import { env } from "cloudflare:workers";
 import { otpSchema } from "@/lib/auth/otp";
 import { jsonError, jsonOk } from "@/lib/server/http";
@@ -28,7 +29,10 @@ export async function POST(request: Request) {
       if (googleConfigured() && !await googleLinked(challenge.mobile)) return jsonOk({ redirectTo: "/account/google" });
       return jsonOk({ redirectTo: postLoginDestination(user) });
     }
-    await env.DB.prepare("UPDATE otp_challenges SET status = 'verified', verified_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'").bind(challenge.id).run();
+    const restriction = await registrationRestriction(challenge.mobile);
+    if (restriction) return restriction;
+    const verified = await env.DB.prepare("UPDATE otp_challenges SET status = 'verified', verified_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending' AND consumed_at IS NULL AND datetime(expires_at) > CURRENT_TIMESTAMP").bind(challenge.id).run();
+    if (!verified.meta.changes) return jsonError("This OTP request is no longer valid.", 409, "OTP_INVALID_STATE");
     return jsonOk({ challengeId: challenge.id, mobile: challenge.mobile });
   } catch (error) { console.error("MSG91 verification failed", error); return jsonError("OTP verification is temporarily unavailable.", 502, "OTP_VERIFY_FAILED"); }
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { emailSchema } from "@/lib/auth/email";
 import { mobileSchema } from "@/lib/auth/otp";
 import { jsonError, jsonOk } from "@/lib/server/http";
+import { previousAccount, registrationConflict, registrationRestriction } from "@/lib/server/registration";
 import { createSession } from "@/lib/server/session";
 import { getVerifiedHospitalPlace, GooglePlacesError } from "@/lib/server/google-places";
 import { notifyAdminsOfRegistration } from "@/lib/server/web-push";
@@ -54,58 +55,14 @@ export async function POST(request: Request) {
       "OUTSIDE_AMRITSAR",
     );
   }
-  const challenge = await env.DB.prepare(
-    "SELECT id FROM otp_challenges WHERE id = ? AND mobile = ? AND purpose = 'registration' AND status = 'verified' AND consumed_at IS NULL AND datetime(expires_at) > CURRENT_TIMESTAMP LIMIT 1",
-  )
-    .bind(data.challengeId, data.mobile)
-    .first<{ id: string }>();
-  if (!challenge)
-    return jsonError(
-      "Mobile verification is missing or expired.",
-      409,
-      "MOBILE_NOT_VERIFIED",
-    );
-  const existing = await env.DB.prepare(
-    "SELECT id, role, status FROM users WHERE mobile = ? AND role = 'hospital' LIMIT 1",
-  )
-    .bind(data.mobile)
-    .first<{ id: string; role: string; status: string }>();
-  if (existing) {
-    const hospital = await env.DB.prepare(
-      "SELECT id, approval_status AS approvalStatus FROM hospitals WHERE owner_user_id = ? LIMIT 1",
-    )
-      .bind(existing.id)
-      .first<{ id: string; approvalStatus: string }>();
-    if (!hospital)
-      return jsonError(
-        "This hospital account is incomplete. Please contact support.",
-        409,
-        "HOSPITAL_INCOMPLETE",
-      );
-    await env.DB.prepare(
-      "UPDATE otp_challenges SET consumed_at = CURRENT_TIMESTAMP WHERE id = ?",
-    )
-      .bind(challenge.id)
-      .run();
-    await createSession(existing.id);
-    return jsonOk({
-      registration: {
-        id: hospital.id,
-        status: hospital.approvalStatus,
-        message:
-          hospital.approvalStatus === "approved"
-            ? "Hospital account is already approved."
-            : "Registration is already submitted for admin approval.",
-      },
-      existing: true,
-    });
-  }
+  const restriction = await registrationRestriction(data.mobile);
+  if (restriction) return restriction;
   const userId = crypto.randomUUID();
   const hospitalId = crypto.randomUUID();
-  await env.DB.batch([
+  try { await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO users (id, mobile, email, full_name, role, status) VALUES (?, ?, ?, ?, 'hospital', 'pending')",
-    ).bind(userId, data.mobile, data.email || null, data.fullName),
+      `INSERT INTO users (id, mobile, email, full_name, role, status, registration_challenge_id, previous_account_id) VALUES (?, ?, ?, ?, 'hospital', 'pending', ?, ${previousAccount})`,
+    ).bind(userId, data.mobile, data.email || null, data.fullName, data.challengeId, data.mobile),
     env.DB.prepare(
       "INSERT INTO hospitals (id, owner_user_id, name, facility_type, address, city, google_place_id, latitude, longitude, google_maps_url, approval_status) VALUES (?, ?, ?, ?, ?, 'Amritsar', ?, ?, ?, ?, 'pending')",
     ).bind(
@@ -119,10 +76,8 @@ export async function POST(request: Request) {
       String(data.longitude),
       data.googleMapsUri,
     ),
-    env.DB.prepare(
-      "UPDATE otp_challenges SET consumed_at = CURRENT_TIMESTAMP WHERE id = ?",
-    ).bind(challenge.id),
-  ]);
+  ]); } catch (error) { return registrationConflict(error); }
+  const application = await env.DB.prepare("SELECT previous_account_id IS NOT NULL AS fresh FROM users WHERE id = ?").bind(userId).first<{ fresh: number }>();
   console.info("Registration saved", { registrationId: hospitalId, role: data.facilityType });
   try { await notifyAdminsOfRegistration({ id: hospitalId, role: data.facilityType, name: data.hospitalName }); }
   catch (error) { console.error("Admin registration push failed", { registrationId: hospitalId, reason: error instanceof Error ? error.name : "UNKNOWN" }); }
@@ -132,6 +87,7 @@ export async function POST(request: Request) {
       registration: {
         id: hospitalId,
         status: "pending",
+        documentRequired: Boolean(application?.fresh),
         message: "Registration submitted for admin approval.",
       },
     },

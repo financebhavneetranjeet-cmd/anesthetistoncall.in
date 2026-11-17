@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 import { mobileSchema } from "@/lib/auth/otp";
 import { jsonError, jsonOk } from "@/lib/server/http";
+import { registrationCutoff, registrationRestriction } from "@/lib/server/registration";
 import { createSession } from "@/lib/server/session";
 import { findLoginUser, loginAllowed, loginDeniedMessage, postLoginDestination } from "@/lib/server/login";
 import { dashboardAccounts } from "@/lib/server/dashboard-access";
@@ -26,12 +27,12 @@ function verifiedIdentifier(result: Record<string, unknown>): string | null {
   return null;
 }
 
-function verifiedTokenIdentifier(accessToken: string): string | null {
+function verifiedTokenClaims(accessToken: string): Record<string, unknown> | null {
   try {
     const encoded = accessToken.split(".")[1];
     if (!encoded) return null;
     const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(encoded.length / 4) * 4, "=");
-    return verifiedIdentifier(JSON.parse(atob(normalized)) as Record<string, unknown>);
+    return JSON.parse(atob(normalized)) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -63,17 +64,33 @@ export async function POST(request: Request) {
       if (response.status === 429) return jsonError("Too many verification attempts. Please wait and retry.", 429, "OTP_RATE_LIMITED");
       return jsonError("OTP verification was not accepted. Please verify again.", 401, "OTP_NOT_VERIFIED");
     }
-    const identifier = result ? verifiedIdentifier(result) ?? verifiedTokenIdentifier(accessToken) : null;
+    const claims = verifiedTokenClaims(accessToken);
+    const identifier = result ? verifiedIdentifier(result) ?? (claims && verifiedIdentifier(claims)) : null;
     if (!result || result.type !== "success" || identifier !== `91${mobile}`) return jsonError("The verified mobile does not match. Please verify this number again.", 401, "OTP_NOT_VERIFIED");
     const user = purpose === "login" ? await findLoginUser(mobile, role) : null;
     if (purpose === "login" && user && !loginAllowed(user, mobile)) { const denied = loginDeniedMessage(user); return jsonError(denied.message, 403, denied.code); }
     const challengePurpose = purpose === "login" && !user ? "registration" : purpose;
+    if (challengePurpose === "registration") {
+      const restriction = await registrationRestriction(mobile);
+      if (restriction) return restriction;
+    }
+    const issuedAt = typeof claims?.iat === "number" && claims.iat > 0 && claims.iat < 253402300799 ? claims.iat * 1000 : 0;
+    const cutoff = await registrationCutoff(mobile);
+    if (cutoff && issuedAt <= cutoff) {
+      return jsonError("Request a new OTP and verify again.", 409, "OTP_STALE");
+    }
     // A deterministic UUID prevents the same provider token being exchanged twice, including concurrent requests.
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(accessToken));
     const hex = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
     const id = `${hex.slice(0,8)}-${hex.slice(8,12)}-4${hex.slice(13,16)}-8${hex.slice(17,20)}-${hex.slice(20,32)}`;
     const expiresAt = new Date(Date.now() + 15 * 60000).toISOString();
-    const inserted = await env.DB.prepare("INSERT OR IGNORE INTO otp_challenges (id, mobile, purpose, status, attempt_count, expires_at, verified_at, consumed_at) VALUES (?, ?, ?, 'verified', 0, ?, CURRENT_TIMESTAMP, ?)").bind(id, mobile, challengePurpose, expiresAt, user ? new Date().toISOString() : null).run();
+    const inserted = await env.DB.prepare(`INSERT OR IGNORE INTO otp_challenges
+      (id, mobile, purpose, status, attempt_count, expires_at, verified_at, consumed_at)
+      SELECT ?, ?, ?, 'verified', 0, ?, CURRENT_TIMESTAMP, ?
+      WHERE NOT EXISTS (SELECT 1 FROM archived_accounts WHERE mobile = ? AND deleted_at >= ?)
+        AND NOT EXISTS (SELECT 1 FROM mobile_security_bans WHERE mobile = ? AND (cleared_at IS NULL OR cleared_at >= ?))`)
+      .bind(id, mobile, challengePurpose, expiresAt, user ? new Date().toISOString() : null,
+        mobile, new Date(issuedAt).toISOString(), mobile, new Date(issuedAt).toISOString()).run();
     if (!inserted.meta.changes) return jsonError("This verification has already been used. Please verify again.", 409, "OTP_ALREADY_USED");
     if (user) {
       const accounts = await dashboardAccounts({ mobile, role: user.role });

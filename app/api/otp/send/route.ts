@@ -1,3 +1,4 @@
+import { registrationRestriction } from "@/lib/server/registration";
 import { env } from "cloudflare:workers";
 import { mobileSchema } from "@/lib/auth/otp";
 import { jsonError, jsonOk } from "@/lib/server/http";
@@ -10,6 +11,10 @@ export async function POST(request: Request) {
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "Invalid mobile number");
   const purpose = body?.purpose ?? "registration";
   if (purpose !== "registration" && purpose !== "login") return jsonError("Invalid OTP purpose.");
+  if (purpose === "registration") {
+    const restriction = await registrationRestriction(parsed.data);
+    if (restriction) return restriction;
+  }
   if (purpose === "login") {
     const user = await env.DB.prepare("SELECT id, status FROM users WHERE mobile = ? LIMIT 1").bind(parsed.data).first<{ id: string; status: string }>();
     if (!user || user.status === "suspended") return jsonError("This account cannot sign in. Check your mobile number or contact the administrator.", 403, "LOGIN_UNAVAILABLE");

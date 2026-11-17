@@ -16,6 +16,7 @@ export function isAdminMobile(mobile: string): boolean {
 // Call only after server-side OTP verification. Public registration cannot choose Admin.
 export async function findLoginUser(mobile: string, role?: "hospital" | "anesthetist" | "surgeon" | "admin", provisionAdmin = true) {
   if (!env.DB) return null;
+  if (await env.DB.prepare("SELECT 1 FROM mobile_security_bans WHERE mobile = ? AND cleared_at IS NULL").bind(mobile).first()) return null;
   await env.DB.batch([
     env.DB.prepare("UPDATE users SET account_status='active', suspended_until=NULL, updated_at=CURRENT_TIMESTAMP WHERE mobile=? AND account_status='suspended' AND suspended_until IS NOT NULL AND datetime(suspended_until) <= CURRENT_TIMESTAMP").bind(mobile),
     env.DB.prepare("INSERT INTO user_access_audit_logs(id,user_id,action,reason,admin_actor,previous_status,new_status) SELECT ?,id,'restore','Temporary suspension expired automatically.','system','suspended','active' FROM users WHERE mobile=? AND account_status='active' AND suspended_until IS NULL AND EXISTS (SELECT 1 FROM user_access_audit_logs l WHERE l.user_id=users.id AND l.new_status='suspended' AND l.suspension_expires_at IS NOT NULL AND datetime(l.suspension_expires_at) <= CURRENT_TIMESTAMP AND NOT EXISTS (SELECT 1 FROM user_access_audit_logs r WHERE r.user_id=users.id AND r.action='restore' AND r.created_at >= l.created_at))").bind(crypto.randomUUID(), mobile),

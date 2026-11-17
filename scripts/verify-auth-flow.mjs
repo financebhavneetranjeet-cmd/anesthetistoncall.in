@@ -20,8 +20,9 @@ const contentChecks = [
   ["app/api/otp/widget/route.ts", ["MSG91_WIDGET_ID", "MSG91_WIDGET_TOKEN", "MSG91_AUTH_KEY", "verifyAccessToken", "identifier !== `91${mobile}`"]],
   ["app/login/login-form.tsx", ["purpose=\"login\"", "/register/choose-role", "redirectTo"]],
   ["app/register/choose-role/role-choice.tsx", ["hospital", "anesthetist", "surgeon"]],
-  ["app/api/hospitals/register/route.ts", ["purpose = 'registration'", "consumed_at IS NULL", "createSession"]],
-  ["app/api/clinicians/register/route.ts", ["purpose = 'registration'", "consumed_at IS NULL", "createSession"]],
+  ["app/api/hospitals/register/route.ts", ["registration_challenge_id", "createSession"]],
+  ["app/api/clinicians/register/route.ts", ["registration_challenge_id", "createSession"]],
+  ["drizzle/0030_fresh_reregistration.sql", ["guard_new_registration", "purpose = 'registration'", "consumed_at IS NULL"]],
   ["lib/server/login.ts", ["postLoginDestination", "/account/pending", "/cases"]],
   ["lib/server/session.ts", ["httpOnly: true", "secure: true", "sameSite: \"lax\""]],
 ];
